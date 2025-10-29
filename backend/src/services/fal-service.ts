@@ -12,6 +12,7 @@ export interface GenerationRequest {
   strength?: number;
   guidanceScale?: number;
   numImages?: number;
+  aspectRatio?: '9:16' | '16:9' | '1:1';
 }
 
 export interface GenerationResult {
@@ -44,6 +45,11 @@ export async function generateImages(
       guidance_scale: request.guidanceScale || 7.5,
       num_images: request.numImages || 4,
     };
+    
+    // Add aspect ratio if specified
+    if (request.aspectRatio) {
+      input.aspect_ratio = request.aspectRatio;
+    }
     
     // Add img2img parameters if base image provided
     if (request.imageUrl) {

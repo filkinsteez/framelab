@@ -24,19 +24,13 @@ export function useDragAndDrop({ editor, shaderManager }: UseDragAndDropOptions)
     const container = editor.getContainer();
 
     const handleDrop = async (e: DragEvent) => {
-      // Check if tldraw is currently dragging/selecting - if so, don't interfere
-      const isDraggingShape = editor.getInstanceState().isDragging;
-      if (isDraggingShape) {
-        return; // Let tldraw handle its own drag
-      }
-      
       // Check if this is an external file drop
       const dataTransfer = e.dataTransfer;
       if (!dataTransfer) return;
       
       const files = Array.from(dataTransfer.files || []);
       
-      // No files = not a file drop, let tldraw handle it
+      // No files = not a file drop, ignore
       if (files.length === 0) return;
       
       // We have actual files from outside - handle this drop
