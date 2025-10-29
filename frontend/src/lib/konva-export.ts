@@ -81,11 +81,20 @@ export async function exportFrameAsDataUri(
   frameY: number
 ): Promise<string | null> {
   const stage = stageRef.current;
-  if (!stage) return null;
+  
+  console.log('exportFrameAsDataUri called');
+  console.log('Stage:', stage);
+  console.log('Frame bounds:', { x: frameX, y: frameY, w: FRAME_SPECS[frameMode].w, h: FRAME_SPECS[frameMode].h });
+  
+  if (!stage) {
+    console.error('Stage is null, cannot export');
+    return null;
+  }
 
   const { w, h } = FRAME_SPECS[frameMode];
 
   try {
+    console.log('Calling stage.toDataURL...');
     const dataURL = stage.toDataURL({
       x: frameX,
       y: frameY,
@@ -94,6 +103,15 @@ export async function exportFrameAsDataUri(
       pixelRatio: 1,
       mimeType: 'image/png',
     });
+
+    console.log('Data URL created, length:', dataURL.length);
+    console.log('Data URL starts with:', dataURL.substring(0, 50));
+    
+    // Verify it's a valid image by checking the header
+    if (!dataURL.startsWith('data:image/png')) {
+      console.error('Invalid data URL format!');
+      return null;
+    }
 
     return dataURL;
   } catch (error) {

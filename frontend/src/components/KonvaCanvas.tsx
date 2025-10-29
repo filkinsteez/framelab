@@ -17,6 +17,7 @@ import {
   createCircle,
   createTriangle,
   createText,
+  createPromptBox,
   bringToFront,
   sendToBack,
   bringForward,
@@ -24,6 +25,10 @@ import {
   deleteObjects,
   duplicateObjects,
 } from '../lib/konva-tools';
+import { PromptBoxModal } from '../components/PromptBoxKonva';
+import { exportFrameAsDataUri } from '../lib/konva-export';
+import { FalClient } from '../lib/fal-client';
+import { createGallery } from '../lib/konva-tools';
 
 interface KonvaCanvasProps {
   frameMode: FrameMode;
@@ -33,6 +38,7 @@ interface KonvaCanvasProps {
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   currentTool: Tool;
   onTriggerRipple?: (x: number, y: number) => void;
+  stageRef?: React.RefObject<Konva.Stage>;
 }
 
 export function KonvaCanvas({
@@ -43,11 +49,14 @@ export function KonvaCanvas({
   setSelectedIds,
   currentTool,
   onTriggerRipple,
+  stageRef: externalStageRef,
 }: KonvaCanvasProps) {
-  const stageRef = useRef<Konva.Stage>(null);
+  const localStageRef = useRef<Konva.Stage>(null);
+  const stageRef = externalStageRef || localStageRef;
   const transformerRef = useRef<Konva.Transformer>(null);
   const artLayerRef = useRef<Konva.Layer>(null);
   
+  // Initialize viewport
   const [viewport, setViewport] = useState<ViewportState>({
     zoom: 1,
     pan: { x: 0, y: 0 },
@@ -56,6 +65,11 @@ export function KonvaCanvas({
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [promptBoxModal, setPromptBoxModal] = useState<{
+    objectId: string;
+    screenX: number;
+    screenY: number;
+  } | null>(null);
 
   // Get frame dimensions
   const { w: frameW, h: frameH } = FRAME_SPECS[frameMode];
@@ -66,9 +80,10 @@ export function KonvaCanvas({
     height: window.innerHeight,
   });
 
-  // Center frame in viewport (accounting for zoom and pan)
-  const frameX = (viewportSize.width / 2 - viewport.pan.x) / viewport.zoom - frameW / 2;
-  const frameY = (viewportSize.height / 2 - viewport.pan.y) / viewport.zoom - frameH / 2;
+  // Position frame in world coordinates (before pan/zoom)
+  // Center it in the viewport
+  const frameX = viewportSize.width / 2 - frameW / 2;
+  const frameY = viewportSize.height / 2 - frameH / 2;
 
   // Handle window resize
   useEffect(() => {
@@ -148,28 +163,61 @@ export function KonvaCanvas({
       const pointerPos = stage.getPointerPosition();
       if (!pointerPos) return;
 
-      const localX = (pointerPos.x - viewport.pan.x) / viewport.zoom - frameX;
-      const localY = (pointerPos.y - viewport.pan.y) / viewport.zoom - frameY;
+      // Stage handles the transform, so pointerPosition is already in world coords
+      // Just need to convert to frame-local coordinates
+      const localX = pointerPos.x - frameX;
+      const localY = pointerPos.y - frameY;
+
+      console.log('Click:', { 
+        screen: pointerPos, 
+        frame: { frameX, frameY, frameW, frameH },
+        local: { localX, localY }
+      });
 
       // Check if click is inside frame
       const insideFrame = localX >= 0 && localX <= frameW && localY >= 0 && localY <= frameH;
+      console.log('Inside frame?', insideFrame);
 
       if (insideFrame) {
+        console.log('Clicked inside frame with tool:', currentTool);
+        console.log('Position:', { localX, localY });
+        
         // Create object based on current tool
         switch (currentTool) {
           case 'rect':
+            console.log('Creating rectangle');
             setObjects(prev => [...prev, createRectangle(localX, localY)]);
             return;
           case 'circle':
+            console.log('Creating circle');
             setObjects(prev => [...prev, createCircle(localX, localY)]);
             return;
           case 'triangle':
+            console.log('Creating triangle');
             setObjects(prev => [...prev, createTriangle(localX, localY)]);
             return;
           case 'text':
+            console.log('Creating text');
             setObjects(prev => [...prev, createText(localX, localY)]);
             return;
+          case 'prompt':
+            console.log('Creating prompt box and opening modal');
+            const promptBox = createPromptBox(localX, localY);
+            console.log('Prompt box created:', promptBox);
+            setObjects(prev => [...prev, promptBox]);
+            // Open modal immediately
+            setPromptBoxModal({
+              objectId: promptBox.id,
+              screenX: e.evt.clientX,
+              screenY: e.evt.clientY,
+            });
+            console.log('Modal state set');
+            return;
+          default:
+            console.log('Unknown tool or select mode');
         }
+      } else {
+        console.log('Clicked outside frame');
       }
 
       // Pan the canvas
@@ -325,6 +373,70 @@ export function KonvaCanvas({
     }
   }, [selectedIds, setObjects, setSelectedIds]);
 
+  // Handle prompt box generation
+  const handlePromptGenerate = useCallback(async (objectId: string, prompt: string) => {
+    // Update prompt box with the new prompt
+    setObjects(prev => 
+      prev.map(obj => 
+        obj.id === objectId && obj.type === 'promptbox'
+          ? { ...obj, prompt, isGenerating: true }
+          : obj
+      )
+    );
+
+    try {
+      // Flatten canvas
+      const canvasDataUri = await exportFrameAsDataUri(
+        stageRef as any,
+        frameMode,
+        frameX,
+        frameY
+      );
+
+      const aspectRatio = frameMode === 'PORTRAIT_9_16' ? '9:16' : '16:9';
+
+      const result = await FalClient.generate({
+        prompt,
+        imageUrl: canvasDataUri || undefined,
+        strength: canvasDataUri ? 0.75 : undefined,
+        aspectRatio,
+        numImages: 4,
+      });
+
+      if (result.success && result.data) {
+        // Find prompt box to get position
+        const promptBox = objects.find(o => o.id === objectId);
+        if (promptBox && promptBox.type === 'promptbox') {
+          // Create gallery next to prompt box
+          const galleryX = promptBox.transform.x + promptBox.w + 50;
+          const galleryY = promptBox.transform.y;
+
+          const gallery = createGallery(
+            galleryX,
+            galleryY,
+            result.data.images.map(img => ({
+              url: img.url,
+              seed: result.data!.seed,
+            }))
+          );
+
+          setObjects(prev => [...prev, gallery]);
+        }
+      }
+    } catch (error) {
+      console.error('Generation failed:', error);
+      alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setObjects(prev =>
+        prev.map(obj =>
+          obj.id === objectId && obj.type === 'promptbox'
+            ? { ...obj, isGenerating: false }
+            : obj
+        )
+      );
+    }
+  }, [objects, frameMode, frameX, frameY, stageRef, setObjects]);
+
   const sortedObjects = sortByZIndex(objects);
 
   return (
@@ -430,6 +542,23 @@ export function KonvaCanvas({
           onDuplicate={() => handleContextMenuAction('duplicate')}
         />
       )}
+
+      {/* Prompt Box Modal */}
+      {promptBoxModal && (() => {
+        const promptBox = objects.find(o => o.id === promptBoxModal.objectId);
+        if (promptBox && promptBox.type === 'promptbox') {
+          return (
+            <PromptBoxModal
+              object={promptBox}
+              screenX={promptBoxModal.screenX}
+              screenY={promptBoxModal.screenY}
+              onClose={() => setPromptBoxModal(null)}
+              onGenerate={(prompt) => handlePromptGenerate(promptBoxModal.objectId, prompt)}
+            />
+          );
+        }
+        return null;
+      })()}
     </>
   );
 }

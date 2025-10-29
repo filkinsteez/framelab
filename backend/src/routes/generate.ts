@@ -9,7 +9,7 @@ const router = Router();
  */
 router.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { prompt, imageUrl, strength, guidanceScale, numImages } = req.body;
+    const { prompt, imageUrl, strength, guidanceScale, numImages, aspectRatio } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({
@@ -17,7 +17,14 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     }
 
-    console.log('Generating images with prompt:', prompt);
+    console.log('=== GENERATION REQUEST ===');
+    console.log('Prompt:', prompt);
+    console.log('Has imageUrl:', !!imageUrl);
+    console.log('ImageUrl length:', imageUrl?.length || 0);
+    console.log('ImageUrl preview:', imageUrl?.substring(0, 100) || 'none');
+    console.log('Strength:', strength);
+    console.log('Aspect ratio:', aspectRatio);
+    console.log('Num images:', numImages);
 
     const result = await generateImages({
       prompt,
@@ -25,6 +32,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       strength,
       guidanceScale,
       numImages,
+      aspectRatio,
     });
 
     res.json({

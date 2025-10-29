@@ -9,6 +9,7 @@ interface TopBarProps {
   onExportJPEG: () => void;
   on3DViewToggle?: () => void;
   show3DView?: boolean;
+  onOpenPrompt?: () => void;
 }
 
 export function TopBar({
@@ -20,6 +21,7 @@ export function TopBar({
   onExportJPEG,
   on3DViewToggle,
   show3DView,
+  onOpenPrompt,
 }: TopBarProps) {
   return (
     <div
@@ -125,12 +127,31 @@ export function TopBar({
           active={currentTool === 'text'}
           onClick={() => onChangeTool('text')}
         />
-        <ToolButton
-          icon="💬"
-          label="Prompt"
-          active={currentTool === 'prompt'}
-          onClick={() => onChangeTool('prompt')}
-        />
+      </div>
+
+      <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd' }} />
+
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <button
+          onClick={() => onOpenPrompt?.()}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#9C27B0',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '13px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>💬</span>
+          Generate with AI
+        </button>
       </div>
 
       <div style={{ flex: 1 }} />

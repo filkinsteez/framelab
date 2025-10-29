@@ -66,7 +66,30 @@ export interface TextObject {
   transform: Transform;
 }
 
-export type CanvasObject = ImageObject | ShapeObject | BrushStroke | TextObject;
+export interface PromptBoxObject {
+  id: string;
+  type: 'promptbox';
+  w: number;
+  h: number;
+  prompt: string;
+  isGenerating: boolean;
+  transform: Transform;
+}
+
+export interface GalleryObject {
+  id: string;
+  type: 'gallery';
+  w: number;
+  h: number;
+  images: Array<{
+    url: string;
+    seed: number;
+  }>;
+  columns: number;
+  transform: Transform;
+}
+
+export type CanvasObject = ImageObject | ShapeObject | BrushStroke | TextObject | PromptBoxObject | GalleryObject;
 
 // ===== Viewport State =====
 

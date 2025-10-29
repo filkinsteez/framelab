@@ -24,6 +24,10 @@ export function RenderObject({ object, isSelected, onSelect, onTransformEnd }: R
       return <BrushRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} />;
     case 'text':
       return <TextRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} />;
+    case 'promptbox':
+    case 'gallery':
+      // These are rendered separately with DOM overlays
+      return null;
     default:
       return null;
   }

@@ -1,4 +1,4 @@
-import type { CanvasObject, ShapeObject, TextObject } from './konva-types';
+import type { CanvasObject, ShapeObject, TextObject, PromptBoxObject, GalleryObject } from './konva-types';
 import { generateId, createDefaultTransform } from './konva-types';
 
 /**
@@ -76,6 +76,46 @@ export function createText(x: number, y: number, text: string = 'Double-click to
     fontSize: 32,
     color: '#000000',
     align: 'left',
+    transform: {
+      ...createDefaultTransform(),
+      x,
+      y,
+      zIndex: Date.now(),
+    },
+  };
+}
+
+/**
+ * Create a prompt box object
+ */
+export function createPromptBox(x: number, y: number): PromptBoxObject {
+  return {
+    id: generateId(),
+    type: 'promptbox',
+    w: 400,
+    h: 200,
+    prompt: '',
+    isGenerating: false,
+    transform: {
+      ...createDefaultTransform(),
+      x,
+      y,
+      zIndex: Date.now(),
+    },
+  };
+}
+
+/**
+ * Create a gallery object
+ */
+export function createGallery(x: number, y: number, images: any[]): GalleryObject {
+  return {
+    id: generateId(),
+    type: 'gallery',
+    w: 600,
+    h: 600,
+    images,
+    columns: 2,
     transform: {
       ...createDefaultTransform(),
       x,
