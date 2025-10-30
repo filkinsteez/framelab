@@ -1,22 +1,31 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Konva from 'konva';
 import { KonvaCanvas } from './components/KonvaCanvas';
 import { TopBar } from './components/TopBar';
-import { ThreeDViewer } from './components/ThreeDViewer';
+import { ToolBelt } from './components/ToolBelt';
 import { SettingsPanel } from './components/SettingsPanel';
 import { PromptBoxModal } from './components/PromptBoxKonva';
 import { exportAndDownload, exportFrameAsDataUri } from './lib/konva-export';
 import { FalClient } from './lib/fal-client';
-import { createGallery } from './lib/konva-tools';
+import { useHistory } from './hooks/useHistory';
 import type { CanvasObject, FrameMode, Tool } from './lib/konva-types';
 import { FRAME_SPECS } from './lib/konva-types';
 
 function AppKonva() {
   const [frameMode, setFrameMode] = useState<FrameMode>('PORTRAIT_9_16');
-  const [objects, setObjects] = useState<CanvasObject[]>([]);
+  
+  // Use history hook for undo/redo support
+  const {
+    state: objects,
+    setState: setObjects,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useHistory<CanvasObject[]>([]);
+  
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentTool, setCurrentTool] = useState<Tool>('select');
-  const [show3DView, setShow3DView] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -25,39 +34,51 @@ function AppKonva() {
 
   const { w: frameW, h: frameH } = FRAME_SPECS[frameMode];
 
-  // Calculate frame position (centered in viewport)
+  // Calculate frame position (must match KonvaCanvas calculation)
   const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight - 60; // Subtract top bar height
-  const frameX = (viewportWidth - frameW) / 2;
-  const frameY = (viewportHeight - frameH) / 2 + 60; // Add top bar offset
+  const viewportHeight = window.innerHeight;
+  const frameX = viewportWidth / 2 - frameW / 2;
+  const frameY = viewportHeight / 2 - frameH / 2;
 
-  const handleExportPNG = async () => {
+  const handleSave = async () => {
     if (!stageRef.current) {
       alert('Canvas not ready');
       return;
     }
     
     try {
-      await exportAndDownload(stageRef as any, frameMode, frameX, frameY - 60, 'png');
+      console.log('Saving as JPEG with frame position:', { frameX, frameY, frameW, frameH });
+      await exportAndDownload(stageRef as any, frameMode, frameX, frameY, 'jpeg');
     } catch (error) {
-      console.error('Export failed:', error);
-      alert('Export failed. Check console for details.');
+      console.error('Save failed:', error);
+      alert('Save failed. Check console for details.');
     }
   };
 
-  const handleExportJPEG = async () => {
-    if (!stageRef.current) {
-      alert('Canvas not ready');
-      return;
-    }
-    
-    try {
-      await exportAndDownload(stageRef as any, frameMode, frameX, frameY - 60, 'jpeg');
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('Export failed. Check console for details.');
+  const handleDelete = () => {
+    if (selectedIds.length > 0) {
+      setObjects(prev => prev.filter(obj => !selectedIds.includes(obj.id)));
+      setSelectedIds([]);
     }
   };
+
+  // Keyboard shortcut for Delete
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+        e.preventDefault();
+        handleDelete();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds, handleDelete]);
 
   const handleFrameChange = (mode: FrameMode) => {
     if (objects.length > 0) {
@@ -69,9 +90,6 @@ function AppKonva() {
     setFrameMode(mode);
   };
 
-  const handle3DViewToggle = () => {
-    setShow3DView(!show3DView);
-  };
 
   const handleOpenPrompt = () => {
     console.log('Opening prompt dialog');
@@ -122,43 +140,35 @@ function AppKonva() {
         
         const img = result.data.images[0]; // Take the first (and only) image
         
+        const imgAspect = img.width / img.height;
+        const frameAspect = frameW / frameH;
+        
         console.log('Received image:', {
           url: img.url.substring(0, 50) + '...',
           width: img.width,
           height: img.height,
-          aspectRatio: (img.width / img.height).toFixed(2),
+          aspectRatio: imgAspect.toFixed(3),
         });
         
-        console.log('Frame dimensions:', {
+        console.log('Frame:', {
           width: frameW,
           height: frameH,
-          aspectRatio: (frameW / frameH).toFixed(2),
+          aspectRatio: frameAspect.toFixed(3),
         });
         
-        // Scale to EXACTLY fill the frame
-        // Since Nano Banana should return the correct aspect ratio,
-        // we can scale to fill the frame dimensions exactly
-        const scaleX = frameW / img.width;
-        const scaleY = frameH / img.height;
-        const scale = Math.max(scaleX, scaleY); // Fill frame (may crop slightly)
-        
-        // Center the image if it doesn't match perfectly
-        const scaledW = img.width * scale;
-        const scaledH = img.height * scale;
-        const offsetX = (frameW - scaledW) / 2;
-        const offsetY = (frameH - scaledH) / 2;
-        
-        // Create single image that fills the frame
+        // SIMPLE APPROACH: Just render the image at exactly the frame size
+        // Set w/h to frame dimensions and scale to 1
+        // This way it fills the frame perfectly regardless of source image size
         const newImage: CanvasObject = {
           id: `img_${Date.now()}`,
           type: 'image',
           src: img.url,
-          w: img.width,
-          h: img.height,
+          w: frameW,  // Set to frame width
+          h: frameH,  // Set to frame height
           transform: {
-            x: offsetX,
-            y: offsetY,
-            scale,
+            x: 0,  // Top-left of frame
+            y: 0,
+            scale: 1,  // No additional scaling needed
             rotation: 0,
             opacity: 1,
             zIndex: Date.now(),
@@ -170,16 +180,17 @@ function AppKonva() {
           },
         };
         
-        console.log('Positioning:', {
-          scale,
-          scaledSize: { w: scaledW, h: scaledH },
-          offset: { x: offsetX, y: offsetY },
+        console.log('Created image to fill frame:', {
+          imageUrl: img.url,
+          storedSize: { w: frameW, h: frameH },
+          scale: 1,
+          position: { x: 0, y: 0 },
+          note: 'Image will fill entire frame',
         });
 
         // REPLACE entire canvas with just this one image
         console.log('CLEARING canvas and replacing with single generated image');
         setObjects([newImage]);
-        console.log('Canvas replaced - should fill frame perfectly');
       } else {
         console.error('Generation failed or no data:', result);
       }
@@ -196,12 +207,6 @@ function AppKonva() {
       <TopBar
         frameMode={frameMode}
         onChangeFrame={handleFrameChange}
-        currentTool={currentTool}
-        onChangeTool={setCurrentTool}
-        onExportPNG={handleExportPNG}
-        onExportJPEG={handleExportJPEG}
-        on3DViewToggle={handle3DViewToggle}
-        show3DView={show3DView}
         onOpenPrompt={handleOpenPrompt}
       />
 
@@ -213,13 +218,23 @@ function AppKonva() {
           selectedIds={selectedIds}
           setSelectedIds={setSelectedIds}
           currentTool={currentTool}
-          stageRef={stageRef}
+          stageRef={stageRef as any}
         />
       </div>
 
-      <SettingsPanel visible={showSettings} onClose={() => setShowSettings(false)} />
+      <ToolBelt
+        currentTool={currentTool}
+        onChangeTool={setCurrentTool}
+        onUndo={undo}
+        onRedo={redo}
+        onDelete={handleDelete}
+        onSave={handleSave}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        hasSelection={selectedIds.length > 0}
+      />
 
-      <ThreeDViewer visible={show3DView} />
+      <SettingsPanel visible={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Prompt Dialog - Centered on screen */}
       {showPromptDialog && (
@@ -309,58 +324,6 @@ function AppKonva() {
         </div>
       )}
 
-      {/* Frame info overlay */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 16,
-          left: 16,
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          padding: '12px 16px',
-          borderRadius: '8px',
-          fontSize: '12px',
-          color: '#333',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          zIndex: 1000,
-        }}
-      >
-        <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-          Frame: {frameMode === 'PORTRAIT_9_16' ? '9:16 Portrait' : '16:9 Landscape'}
-        </div>
-        <div style={{ fontSize: '11px', color: '#666' }}>
-          {frameW} × {frameH} px
-        </div>
-        <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-          Objects: {objects.length} | Selected: {selectedIds.length}
-        </div>
-      </div>
-
-      {/* Instructions */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          padding: '12px 16px',
-          borderRadius: '8px',
-          fontSize: '11px',
-          color: '#333',
-          maxWidth: '250px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          zIndex: 1000,
-        }}
-      >
-        <div style={{ fontWeight: 'bold', marginBottom: '6px', fontSize: '12px' }}>
-          Quick Tips
-        </div>
-        <ul style={{ margin: 0, paddingLeft: '16px', lineHeight: '1.6' }}>
-          <li>Drag & drop images into frame</li>
-          <li>Scroll to zoom, drag to pan</li>
-          <li>Use tools to create shapes</li>
-          <li>Everything clips to frame bounds</li>
-        </ul>
-      </div>
     </div>
   );
 }

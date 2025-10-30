@@ -1,26 +1,14 @@
-import type { FrameMode, Tool } from '../lib/konva-types';
+import type { FrameMode } from '../lib/konva-types';
 
 interface TopBarProps {
   frameMode: FrameMode;
   onChangeFrame: (mode: FrameMode) => void;
-  currentTool: Tool;
-  onChangeTool: (tool: Tool) => void;
-  onExportPNG: () => void;
-  onExportJPEG: () => void;
-  on3DViewToggle?: () => void;
-  show3DView?: boolean;
   onOpenPrompt?: () => void;
 }
 
 export function TopBar({
   frameMode,
   onChangeFrame,
-  currentTool,
-  onChangeTool,
-  onExportPNG,
-  onExportJPEG,
-  on3DViewToggle,
-  show3DView,
   onOpenPrompt,
 }: TopBarProps) {
   return (
@@ -87,160 +75,32 @@ export function TopBar({
         </button>
       </div>
 
-      <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd' }} />
-
-      {/* Tools */}
-      <div style={{ display: 'flex', gap: '4px' }}>
-        <ToolButton
-          icon="👆"
-          label="Select"
-          active={currentTool === 'select'}
-          onClick={() => onChangeTool('select')}
-        />
-        <ToolButton
-          icon="✏️"
-          label="Brush"
-          active={currentTool === 'brush'}
-          onClick={() => onChangeTool('brush')}
-        />
-        <ToolButton
-          icon="▢"
-          label="Rect"
-          active={currentTool === 'rect'}
-          onClick={() => onChangeTool('rect')}
-        />
-        <ToolButton
-          icon="●"
-          label="Circle"
-          active={currentTool === 'circle'}
-          onClick={() => onChangeTool('circle')}
-        />
-        <ToolButton
-          icon="▲"
-          label="Triangle"
-          active={currentTool === 'triangle'}
-          onClick={() => onChangeTool('triangle')}
-        />
-        <ToolButton
-          icon="T"
-          label="Text"
-          active={currentTool === 'text'}
-          onClick={() => onChangeTool('text')}
-        />
-      </div>
-
-      <div style={{ width: '1px', height: '30px', backgroundColor: '#ddd' }} />
-
-      {/* Action buttons */}
-      <div style={{ display: 'flex', gap: '4px' }}>
-        <button
-          onClick={() => onOpenPrompt?.()}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#9C27B0',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
-          <span style={{ fontSize: '16px' }}>💬</span>
-          Generate with AI
-        </button>
-      </div>
 
       <div style={{ flex: 1 }} />
 
-      {/* Export buttons */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <ExportButton onClick={onExportPNG}>
-          📥 PNG
-        </ExportButton>
-        <ExportButton onClick={onExportJPEG}>
-          📄 JPEG
-        </ExportButton>
-        
-        {on3DViewToggle && (
-          <ExportButton
-            onClick={on3DViewToggle}
-            active={show3DView}
-          >
-            🎮 3D
-          </ExportButton>
-        )}
-      </div>
+      {/* Action buttons */}
+      <button
+        onClick={() => onOpenPrompt?.()}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: '#9C27B0',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          boxShadow: '0 2px 8px rgba(156, 39, 176, 0.3)',
+        }}
+      >
+        <span style={{ fontSize: '18px' }}>💬</span>
+        Generate with AI
+      </button>
     </div>
   );
 }
 
-function ToolButton({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: string;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      style={{
-        padding: '8px 12px',
-        backgroundColor: active ? '#e3f2fd' : 'transparent',
-        border: active ? '2px solid #2196F3' : '2px solid transparent',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '2px',
-        transition: 'all 0.2s',
-        minWidth: '60px',
-      }}
-    >
-      <span style={{ fontSize: '20px' }}>{icon}</span>
-      <span style={{ fontSize: '10px', fontWeight: active ? 'bold' : 'normal' }}>
-        {label}
-      </span>
-    </button>
-  );
-}
-
-function ExportButton({
-  onClick,
-  children,
-  active,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-  active?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '10px 16px',
-        backgroundColor: active ? '#2196F3' : '#4CAF50',
-        color: 'white',
-        border: 'none',
-        borderRadius: '6px',
-        fontSize: '13px',
-        fontWeight: 'bold',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
 

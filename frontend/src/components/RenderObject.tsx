@@ -40,6 +40,19 @@ function ImageRenderer({ object, onSelect, onTransformEnd }: RenderObjectProps) 
 
   if (object.type !== 'image') return null;
 
+  // Debug log when image loads
+  if (image && object.generationParams) {
+    console.log('Rendering generated image:', {
+      natural: { w: image.width, h: image.height },
+      stored: { w: object.w, h: object.h },
+      scale: object.transform.scale,
+      finalRendered: { 
+        w: object.w * object.transform.scale, 
+        h: object.h * object.transform.scale 
+      },
+    });
+  }
+
   return (
     <Group>
       <Image
@@ -59,19 +72,6 @@ function ImageRenderer({ object, onSelect, onTransformEnd }: RenderObjectProps) 
         onDragEnd={() => onTransformEnd(object.id)}
         onTransformEnd={() => onTransformEnd(object.id)}
       />
-      
-      {/* AI Generated badge */}
-      {object.generationParams && (
-        <Rect
-          x={object.transform.x + object.w * object.transform.scale - 80}
-          y={object.transform.y + 8}
-          width={70}
-          height={20}
-          fill="rgba(0, 0, 0, 0.7)"
-          cornerRadius={4}
-          listening={false}
-        />
-      )}
     </Group>
   );
 }

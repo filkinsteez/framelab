@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Stage, Layer, Group, Rect, Transformer } from 'react-konva';
+import { Stage, Layer, Group, Rect, Transformer, Line } from 'react-konva';
 import Konva from 'konva';
 import {
   type CanvasObject,
@@ -8,6 +8,7 @@ import {
   type Tool,
   FRAME_SPECS,
   sortByZIndex,
+  generateId,
 } from '../lib/konva-types';
 import { RenderObject } from './RenderObject';
 import { handleFileDrop } from '../lib/konva-file-utils';
@@ -15,9 +16,6 @@ import { ContextMenu } from './ContextMenu';
 import {
   createRectangle,
   createCircle,
-  createTriangle,
-  createText,
-  createPromptBox,
   bringToFront,
   sendToBack,
   bringForward,
@@ -25,10 +23,7 @@ import {
   deleteObjects,
   duplicateObjects,
 } from '../lib/konva-tools';
-import { PromptBoxModal } from '../components/PromptBoxKonva';
-import { exportFrameAsDataUri } from '../lib/konva-export';
-import { FalClient } from '../lib/fal-client';
-import { createGallery } from '../lib/konva-tools';
+import { snapToFrame } from '../lib/konva-snapping';
 
 interface KonvaCanvasProps {
   frameMode: FrameMode;
@@ -65,11 +60,14 @@ export function KonvaCanvas({
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [promptBoxModal, setPromptBoxModal] = useState<{
-    objectId: string;
-    screenX: number;
-    screenY: number;
-  } | null>(null);
+  
+  const [snapGuides, setSnapGuides] = useState<{
+    showVerticalCenter: boolean;
+    showHorizontalCenter: boolean;
+  }>({ showVerticalCenter: false, showHorizontalCenter: false });
+  
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [currentBrushPoints, setCurrentBrushPoints] = useState<number[]>([]);
 
   // Get frame dimensions
   const { w: frameW, h: frameH } = FRAME_SPECS[frameMode];
@@ -154,101 +152,115 @@ export function KonvaCanvas({
     }
 
     const clickedOnEmpty = e.target === e.target.getStage();
+    const stage = e.target.getStage();
+    if (!stage) return;
 
-    if (clickedOnEmpty) {
-      // Get click position in frame-local coordinates
-      const stage = e.target.getStage();
-      if (!stage) return;
+    // Use getRelativePointerPosition to account for stage transform (zoom/pan)
+    const pointerPos = stage.getRelativePointerPosition();
+    if (!pointerPos) return;
 
-      const pointerPos = stage.getPointerPosition();
+    // Convert to frame-local coordinates
+    const localX = pointerPos.x - frameX;
+    const localY = pointerPos.y - frameY;
+
+    // Check if inside frame
+    const insideFrame = localX >= 0 && localX <= frameW && localY >= 0 && localY <= frameH;
+
+    // Brush tool - start drawing
+    if (currentTool === 'brush') {
+      if (insideFrame) {
+        setIsDrawing(true);
+        // Store the initial point
+        setCurrentBrushPoints([localX, localY]);
+      }
+      return;
+    }
+
+    if (clickedOnEmpty && insideFrame) {
+      // Create object based on current tool
+      switch (currentTool) {
+        case 'rect':
+          setObjects(prev => [...prev, createRectangle(localX, localY)]);
+          return;
+        case 'circle':
+          setObjects(prev => [...prev, createCircle(localX, localY)]);
+          return;
+      }
+    }
+
+    // Pan the canvas (only in select mode)
+    if (currentTool === 'select' && clickedOnEmpty) {
+      setIsDraggingCanvas(true);
+      setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
+      setSelectedIds([]);
+    }
+  }, [currentTool, frameX, frameY, frameW, frameH, selectedIds, setObjects, setSelectedIds]);
+
+  const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const stage = e.target.getStage();
+    if (!stage) return;
+
+    // Drawing with brush
+    if (isDrawing && currentTool === 'brush') {
+      // Use getRelativePointerPosition to account for stage transform (zoom/pan)
+      const pointerPos = stage.getRelativePointerPosition();
       if (!pointerPos) return;
 
-      // Stage handles the transform, so pointerPosition is already in world coords
-      // Just need to convert to frame-local coordinates
+      // Convert to frame-local coordinates
       const localX = pointerPos.x - frameX;
       const localY = pointerPos.y - frameY;
 
-      console.log('Click:', { 
-        screen: pointerPos, 
-        frame: { frameX, frameY, frameW, frameH },
-        local: { localX, localY }
-      });
-
-      // Check if click is inside frame
-      const insideFrame = localX >= 0 && localX <= frameW && localY >= 0 && localY <= frameH;
-      console.log('Inside frame?', insideFrame);
-
-      if (insideFrame) {
-        console.log('Clicked inside frame with tool:', currentTool);
-        console.log('Position:', { localX, localY });
-        
-        // Create object based on current tool
-        switch (currentTool) {
-          case 'rect':
-            console.log('Creating rectangle');
-            setObjects(prev => [...prev, createRectangle(localX, localY)]);
-            return;
-          case 'circle':
-            console.log('Creating circle');
-            setObjects(prev => [...prev, createCircle(localX, localY)]);
-            return;
-          case 'triangle':
-            console.log('Creating triangle');
-            setObjects(prev => [...prev, createTriangle(localX, localY)]);
-            return;
-          case 'text':
-            console.log('Creating text');
-            setObjects(prev => [...prev, createText(localX, localY)]);
-            return;
-          case 'prompt':
-            console.log('Creating prompt box and opening modal');
-            const promptBox = createPromptBox(localX, localY);
-            console.log('Prompt box created:', promptBox);
-            setObjects(prev => [...prev, promptBox]);
-            // Open modal immediately
-            setPromptBoxModal({
-              objectId: promptBox.id,
-              screenX: e.evt.clientX,
-              screenY: e.evt.clientY,
-            });
-            console.log('Modal state set');
-            return;
-          default:
-            console.log('Unknown tool or select mode');
-        }
-      } else {
-        console.log('Clicked outside frame');
+      // Only draw if inside frame
+      if (localX >= 0 && localX <= frameW && localY >= 0 && localY <= frameH) {
+        setCurrentBrushPoints(prev => [...prev, localX, localY]);
       }
-
-      // Pan the canvas
-      if (currentTool === 'select') {
-        setIsDraggingCanvas(true);
-        setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
-        setSelectedIds([]);
-      }
+      return;
     }
-  }, [currentTool, viewport, frameX, frameY, frameW, frameH, selectedIds, setObjects, setSelectedIds]);
 
-  const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!isDraggingCanvas) return;
+    // Panning canvas
+    if (isDraggingCanvas) {
+      const dx = e.evt.clientX - dragStart.x;
+      const dy = e.evt.clientY - dragStart.y;
 
-    const dx = e.evt.clientX - dragStart.x;
-    const dy = e.evt.clientY - dragStart.y;
+      setViewport(prev => ({
+        ...prev,
+        pan: {
+          x: prev.pan.x + dx,
+          y: prev.pan.y + dy,
+        },
+      }));
 
-    setViewport(prev => ({
-      ...prev,
-      pan: {
-        x: prev.pan.x + dx,
-        y: prev.pan.y + dy,
-      },
-    }));
-
-    setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
-  }, [isDraggingCanvas, dragStart]);
+      setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
+    }
+  }, [isDraggingCanvas, dragStart, isDrawing, currentTool, frameX, frameY, frameW, frameH]);
 
   const handleMouseUp = useCallback(() => {
+    // Finish brush stroke
+    if (isDrawing && currentBrushPoints.length > 2) {
+      const newBrush: CanvasObject = {
+        id: generateId(),
+        type: 'brush',
+        points: currentBrushPoints,
+        color: '#FF0000', // Red
+        size: 6,
+        opacity: 1,
+        transform: {
+          x: 0,
+          y: 0,
+          scale: 1,
+          rotation: 0,
+          opacity: 1,
+          zIndex: Date.now() + 9999999, // Max z-index (draw over everything)
+        },
+      };
+
+      setObjects(prev => [...prev, newBrush]);
+      setCurrentBrushPoints([]);
+    }
+
+    setIsDrawing(false);
     setIsDraggingCanvas(false);
-  }, []);
+  }, [isDrawing, currentBrushPoints, setObjects]);
 
   // Handle file drops
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -301,7 +313,7 @@ export function KonvaCanvas({
     }
   }, [currentTool, setSelectedIds]);
 
-  // Handle object transform
+  // Handle object transform with snapping
   const handleTransformEnd = useCallback((id: string) => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -309,32 +321,66 @@ export function KonvaCanvas({
     const node = stage.findOne(`#${id}`) as Konva.Shape;
     if (!node) return;
 
+    const obj = objects.find(o => o.id === id);
+    if (!obj) return;
+
+    // Calculate object dimensions (accounting for scale)
+    const objWidth = ('w' in obj ? obj.w : 100) * node.scaleX();
+    const objHeight = ('h' in obj ? obj.h : 100) * node.scaleY();
+
+    // Apply snapping
+    const snapResult = snapToFrame(
+      node.x(),
+      node.y(),
+      objWidth,
+      objHeight,
+      frameW,
+      frameH
+    );
+
+    // Update object with snapped position
     setObjects(prev =>
-      prev.map(obj =>
-        obj.id === id
+      prev.map(o =>
+        o.id === id
           ? {
-              ...obj,
+              ...o,
               transform: {
-                ...obj.transform,
-                x: node.x(),
-                y: node.y(),
+                ...o.transform,
+                x: snapResult.x,
+                y: snapResult.y,
                 scale: node.scaleX(),
                 rotation: node.rotation(),
               },
             }
-          : obj
+          : o
       )
     );
-  }, [setObjects]);
+
+    // Update node position if snapped
+    if (snapResult.x !== node.x() || snapResult.y !== node.y()) {
+      node.position({ x: snapResult.x, y: snapResult.y });
+      node.getLayer()?.batchDraw();
+    }
+
+    // Show guides if snapped to center
+    setSnapGuides({
+      showVerticalCenter: snapResult.snappedToVerticalCenter,
+      showHorizontalCenter: snapResult.snappedToHorizontalCenter,
+    });
+
+    // Hide guides after a delay
+    setTimeout(() => {
+      setSnapGuides({ showVerticalCenter: false, showHorizontalCenter: false });
+    }, 1000);
+  }, [setObjects, objects, frameW, frameH]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Delete
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
-        e.preventDefault();
-        setObjects(prev => deleteObjects(prev, selectedIds));
-        setSelectedIds([]);
+      // Don't trigger shortcuts if user is typing in an input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
       }
 
       // Deselect on Escape
@@ -346,7 +392,7 @@ export function KonvaCanvas({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, setObjects, setSelectedIds]);
+  }, [setSelectedIds]);
 
   // Context menu handlers
   const handleContextMenuAction = useCallback((action: string) => {
@@ -372,70 +418,6 @@ export function KonvaCanvas({
         break;
     }
   }, [selectedIds, setObjects, setSelectedIds]);
-
-  // Handle prompt box generation
-  const handlePromptGenerate = useCallback(async (objectId: string, prompt: string) => {
-    // Update prompt box with the new prompt
-    setObjects(prev => 
-      prev.map(obj => 
-        obj.id === objectId && obj.type === 'promptbox'
-          ? { ...obj, prompt, isGenerating: true }
-          : obj
-      )
-    );
-
-    try {
-      // Flatten canvas
-      const canvasDataUri = await exportFrameAsDataUri(
-        stageRef as any,
-        frameMode,
-        frameX,
-        frameY
-      );
-
-      const aspectRatio = frameMode === 'PORTRAIT_9_16' ? '9:16' : '16:9';
-
-      const result = await FalClient.generate({
-        prompt,
-        imageUrl: canvasDataUri || undefined,
-        strength: canvasDataUri ? 0.75 : undefined,
-        aspectRatio,
-        numImages: 4,
-      });
-
-      if (result.success && result.data) {
-        // Find prompt box to get position
-        const promptBox = objects.find(o => o.id === objectId);
-        if (promptBox && promptBox.type === 'promptbox') {
-          // Create gallery next to prompt box
-          const galleryX = promptBox.transform.x + promptBox.w + 50;
-          const galleryY = promptBox.transform.y;
-
-          const gallery = createGallery(
-            galleryX,
-            galleryY,
-            result.data.images.map(img => ({
-              url: img.url,
-              seed: result.data!.seed,
-            }))
-          );
-
-          setObjects(prev => [...prev, gallery]);
-        }
-      }
-    } catch (error) {
-      console.error('Generation failed:', error);
-      alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setObjects(prev =>
-        prev.map(obj =>
-          obj.id === objectId && obj.type === 'promptbox'
-            ? { ...obj, isGenerating: false }
-            : obj
-        )
-      );
-    }
-  }, [objects, frameMode, frameX, frameY, stageRef, setObjects]);
 
   const sortedObjects = sortByZIndex(objects);
 
@@ -498,6 +480,19 @@ export function KonvaCanvas({
                 onTransformEnd={handleTransformEnd}
               />
             ))}
+
+            {/* Current brush stroke being drawn */}
+            {isDrawing && currentBrushPoints.length > 2 && (
+              <Line
+                points={currentBrushPoints}
+                stroke="#FF0000"
+                strokeWidth={6}
+                tension={0.5}
+                lineCap="round"
+                lineJoin="round"
+                listening={false}
+              />
+            )}
           </Group>
 
           {/* Frame border */}
@@ -514,6 +509,31 @@ export function KonvaCanvas({
 
         {/* UI layer (transformer, guides) */}
         <Layer>
+          {/* Snap guides (yellow dashed lines) */}
+          <Group x={frameX} y={frameY}>
+            {/* Vertical center guide */}
+            {snapGuides.showVerticalCenter && (
+              <Line
+                points={[frameW / 2, 0, frameW / 2, frameH]}
+                stroke="#FFD700"
+                strokeWidth={2}
+                dash={[10, 5]}
+                listening={false}
+              />
+            )}
+
+            {/* Horizontal center guide */}
+            {snapGuides.showHorizontalCenter && (
+              <Line
+                points={[0, frameH / 2, frameW, frameH / 2]}
+                stroke="#FFD700"
+                strokeWidth={2}
+                dash={[10, 5]}
+                listening={false}
+              />
+            )}
+          </Group>
+
           <Transformer
             ref={transformerRef}
             boundBoxFunc={(oldBox, newBox) => {
@@ -542,23 +562,6 @@ export function KonvaCanvas({
           onDuplicate={() => handleContextMenuAction('duplicate')}
         />
       )}
-
-      {/* Prompt Box Modal */}
-      {promptBoxModal && (() => {
-        const promptBox = objects.find(o => o.id === promptBoxModal.objectId);
-        if (promptBox && promptBox.type === 'promptbox') {
-          return (
-            <PromptBoxModal
-              object={promptBox}
-              screenX={promptBoxModal.screenX}
-              screenY={promptBoxModal.screenY}
-              onClose={() => setPromptBoxModal(null)}
-              onGenerate={(prompt) => handlePromptGenerate(promptBoxModal.objectId, prompt)}
-            />
-          );
-        }
-        return null;
-      })()}
     </>
   );
 }

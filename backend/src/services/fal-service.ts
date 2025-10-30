@@ -47,23 +47,41 @@ export async function generateImages(
     
     // Nano Banana edit requires image_urls (array) and aspect_ratio
     if (request.imageUrl && modelId === 'fal-ai/nano-banana/edit') {
-      input.image_urls = [request.imageUrl]; // Nano Banana expects an array
+      // Convert data URI to blob and upload to FAL storage for better handling
+      let imageUrl = request.imageUrl;
       
-      // IMPORTANT: Nano Banana requires aspect_ratio for proper sizing
-      // Also set limit_generations to false so it respects our parameters
-      input.limit_generations = false;
-      
-      if (request.aspectRatio) {
-        input.aspect_ratio = request.aspectRatio;
-      } else {
-        console.warn('No aspect ratio provided, defaulting to 1:1');
-        input.aspect_ratio = '1:1';
+      if (imageUrl.startsWith('data:')) {
+        console.log('Converting data URI to blob and uploading to FAL storage...');
+        try {
+          // Convert data URI to blob
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          
+          // Upload to FAL storage
+          const uploadedUrl = await fal.storage.upload(blob);
+          console.log('Uploaded to FAL storage:', uploadedUrl);
+          imageUrl = uploadedUrl;
+        } catch (uploadError) {
+          console.error('Failed to upload to FAL storage, using data URI:', uploadError);
+          // Fall back to data URI if upload fails
+        }
       }
       
+      input.image_urls = [imageUrl]; // Nano Banana expects an array
+      
+      // Explicitly set aspect_ratio - it seems Nano Banana doesn't always infer correctly
+      if (request.aspectRatio) {
+        input.aspect_ratio = request.aspectRatio;
+        console.log('Explicitly setting aspect_ratio:', input.aspect_ratio);
+      }
+      
+      input.limit_generations = false;
+      
       console.log('Using Nano Banana edit');
-      console.log('Aspect ratio being sent:', input.aspect_ratio);
+      console.log('Image URL type:', imageUrl.startsWith('data:') ? 'data URI' : 'hosted URL');
+      console.log('aspect_ratio:', input.aspect_ratio);
       console.log('limit_generations:', input.limit_generations);
-      console.log('Full input:', JSON.stringify(input, null, 2).substring(0, 500));
+      console.log('Full input:', JSON.stringify({ ...input, image_urls: '[redacted for brevity]' }, null, 2));
     } else if (!request.imageUrl) {
       // Text-to-image with fast-sdxl
       input.guidance_scale = request.guidanceScale || 7.5;

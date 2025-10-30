@@ -13,12 +13,32 @@ export async function exportFrame(
   format: 'png' | 'jpeg' = 'png'
 ): Promise<Blob | null> {
   const stage = stageRef.current;
-  if (!stage) return null;
+  
+  console.log('exportFrame called');
+  console.log('Stage:', stage);
+  console.log('Frame mode:', frameMode);
+  console.log('Export bounds:', { x: frameX, y: frameY });
+  
+  if (!stage) {
+    console.error('Stage is null');
+    return null;
+  }
 
   const { w, h } = FRAME_SPECS[frameMode];
+  
+  console.log('Frame dimensions:', { w, h });
 
   try {
     // Use Konva's built-in export with pixel-perfect frame bounds
+    console.log('Calling stage.toDataURL with:', {
+      x: frameX,
+      y: frameY,
+      width: w,
+      height: h,
+      pixelRatio: 1,
+      mimeType: format === 'jpeg' ? 'image/jpeg' : 'image/png',
+    });
+    
     const dataURL = stage.toDataURL({
       x: frameX,
       y: frameY,
@@ -29,9 +49,13 @@ export async function exportFrame(
       quality: format === 'jpeg' ? 0.95 : 1,
     });
 
+    console.log('DataURL length:', dataURL.length);
+
     // Convert data URL to Blob
     const response = await fetch(dataURL);
     const blob = await response.blob();
+    
+    console.log('Blob created, size:', blob.size, 'bytes');
 
     return blob;
   } catch (error) {
@@ -94,7 +118,7 @@ export async function exportFrameAsDataUri(
   const { w, h } = FRAME_SPECS[frameMode];
 
   try {
-    console.log('Calling stage.toDataURL...');
+    console.log('Calling stage.toDataURL with bounds:', { x: frameX, y: frameY, width: w, height: h });
     const dataURL = stage.toDataURL({
       x: frameX,
       y: frameY,
@@ -113,7 +137,24 @@ export async function exportFrameAsDataUri(
       return null;
     }
 
-    return dataURL;
+    // Verify the exported dimensions by creating an image
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        console.log('Exported canvas dimensions:', {
+          width: img.width,
+          height: img.height,
+          aspectRatio: (img.width / img.height).toFixed(2),
+          expected: { width: w, height: h, aspectRatio: (w / h).toFixed(2) }
+        });
+        resolve(dataURL);
+      };
+      img.onerror = () => {
+        console.error('Failed to verify exported image');
+        resolve(dataURL);
+      };
+      img.src = dataURL;
+    });
   } catch (error) {
     console.error('Failed to export frame as data URI:', error);
     return null;
