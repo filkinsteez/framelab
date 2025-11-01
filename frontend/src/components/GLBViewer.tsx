@@ -1,4 +1,4 @@
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, useGLTF } from '@react-three/drei';
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
@@ -9,14 +9,20 @@ interface GLBViewerProps {
   onClose?: () => void;
   position?: { x: number; y: number };
   size?: { width: number; height: number };
+  intrinsicSize?: { width: number; height: number };
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
 
 /**
  * GLB/GLTF Model Viewer component using React Three Fiber
  * Displays 3D models generated from Tripo API at the position of the original image
  */
-export function GLBViewer({ modelUrl, visible = false, onClose, position, size }: GLBViewerProps) {
+export function GLBViewer({ modelUrl, visible = false, onClose, position, size, intrinsicSize, onCanvasReady }: GLBViewerProps) {
   if (!visible || !modelUrl || !position || !size) return null;
+  
+  // Use intrinsic size for Three.js canvas rendering, or fallback to screen size
+  const canvasWidth = intrinsicSize?.width || size.width;
+  const canvasHeight = intrinsicSize?.height || size.height;
 
   const handleOverlayClick = (event: React.MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
@@ -31,11 +37,8 @@ export function GLBViewer({ modelUrl, visible = false, onClose, position, size }
         width: `${size.width}px`,
         height: `${size.height}px`,
         background: 'white',
-        borderRadius: '8px',
         overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
         zIndex: 10000,
-        border: '3px solid #2196F3',
         pointerEvents: 'auto',
       }}
       onMouseDown={handleOverlayClick}
@@ -109,8 +112,22 @@ export function GLBViewer({ modelUrl, visible = false, onClose, position, size }
         </div>
       )}
 
-      <Canvas gl={{ preserveDrawingBuffer: true }}>
-        <PerspectiveCamera makeDefault position={[0, 0, 3]} />
+      <Canvas 
+        gl={{ 
+          preserveDrawingBuffer: true,
+        }}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+        }}
+        dpr={1}
+        onCreated={({ gl }) => {
+          // Set canvas to intrinsic dimensions for proper snapshot capture
+          gl.setSize(canvasWidth, canvasHeight, false);
+        }}
+      >
+        {onCanvasReady && <CanvasBridge onReady={onCanvasReady} />}
+        <PerspectiveCamera makeDefault position={[0, 0, 3]} aspect={canvasWidth / canvasHeight} />
         <OrbitControls enableDamping dampingFactor={0.05} minDistance={0.5} maxDistance={10} />
 
         <ambientLight intensity={0.5} />
@@ -177,4 +194,17 @@ function ModelContent({ url }: { url: string }) {
   });
 
   return <primitive object={scaledScene} />;
+}
+
+/**
+ * Bridge component to expose the Three.js canvas element
+ */
+function CanvasBridge({ onReady }: { onReady: (canvas: HTMLCanvasElement) => void }) {
+  const { gl } = useThree();
+
+  useEffect(() => {
+    onReady(gl.domElement);
+  }, [gl, onReady]);
+
+  return null;
 }

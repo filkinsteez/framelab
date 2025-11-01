@@ -36,8 +36,10 @@ function AppKonva() {
   const [show3DViewer, setShow3DViewer] = useState(false);
   const [viewer3DPosition, setViewer3DPosition] = useState<{ x: number; y: number } | null>(null);
   const [viewer3DSize, setViewer3DSize] = useState<{ width: number; height: number } | null>(null);
+  const [viewerIntrinsicSize, setViewerIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
   
   const stageRef = useRef<Konva.Stage>(null);
+  const threejsCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const { w: frameW, h: frameH } = FRAME_SPECS[frameMode];
 
@@ -47,13 +49,46 @@ function AppKonva() {
   const frameX = viewportWidth / 2 - frameW / 2;
   const frameY = viewportHeight / 2 - frameH / 2;
 
+  const captureSnapshot = useCallback(() => {
+    if (!activeModelId || !threejsCanvasRef.current) return null;
+    
+    // The Three.js canvas is already rendered at intrinsic dimensions
+    // Just capture it directly
+    try {
+      return threejsCanvasRef.current.toDataURL('image/png');
+    } catch (error) {
+      console.error('Failed to capture snapshot:', error);
+      return null;
+    }
+  }, [activeModelId]);
+
   const handleCloseViewer = useCallback(() => {
+    // Capture snapshot from Three.js canvas and update image
+    if (activeModelId) {
+      const snapshot = captureSnapshot();
+      if (snapshot) {
+        setObjects(prev => prev.map(obj =>
+          obj.id === activeModelId && obj.type === 'image'
+            ? { ...obj, src: snapshot, transform: { ...obj.transform, opacity: 1 } }
+            : obj
+        ));
+      } else {
+        // Restore opacity even if snapshot fails
+        setObjects(prev => prev.map(obj =>
+          obj.id === activeModelId && obj.type === 'image'
+            ? { ...obj, transform: { ...obj.transform, opacity: 1 } }
+            : obj
+        ));
+      }
+    }
+
     setShow3DViewer(false);
     setModelUrl(null);
     setActiveModelId(null);
     setViewer3DPosition(null);
     setViewer3DSize(null);
-  }, []);
+    setViewerIntrinsicSize(null);
+  }, [activeModelId, captureSnapshot, setObjects]);
 
   const updateOverlayPosition = useCallback((objectId: string) => {
     if (!stageRef.current) return;
@@ -67,6 +102,7 @@ function AppKonva() {
 
     setViewer3DPosition({ x: absPos.x, y: absPos.y + 60 });
     setViewer3DSize({ width: imageObject.w * absScale.x, height: imageObject.h * absScale.y });
+    setViewerIntrinsicSize({ width: imageObject.w, height: imageObject.h });
   }, [objects]);
 
   useEffect(() => {
@@ -84,6 +120,7 @@ function AppKonva() {
       setActiveModelId(null);
       setViewer3DPosition(null);
       setViewer3DSize(null);
+      setViewerIntrinsicSize(null);
     }
   }, [activeModelId, objects]);
 
@@ -97,11 +134,19 @@ function AppKonva() {
 
   const open3DViewerForSelected = useCallback(() => {
     if (!selectedObject || selectedObject.type !== 'image' || !selectedObject.model3D) return;
+    
+    // Hide the underlying image
+    setObjects(prev => prev.map(obj =>
+      obj.id === selectedObject.id
+        ? { ...obj, transform: { ...obj.transform, opacity: 0 } }
+        : obj
+    ));
+    
     setActiveModelId(selectedObject.id);
     setModelUrl(selectedObject.model3D.modelUrl);
     updateOverlayPosition(selectedObject.id);
     setShow3DViewer(true);
-  }, [selectedObject, updateOverlayPosition]);
+  }, [selectedObject, updateOverlayPosition, setObjects]);
 
   const handleSave = async () => {
     if (!stageRef.current) {
@@ -110,11 +155,20 @@ function AppKonva() {
     }
     
     try {
-      // Temporarily close 3D viewer during export
+      // Capture 3D snapshot and close viewer before export
       const wasViewerOpen = show3DViewer;
-      if (wasViewerOpen) {
+      const currentModelId = activeModelId;
+      
+      if (wasViewerOpen && currentModelId) {
+        const snapshot = captureSnapshot();
+        if (snapshot) {
+          setObjects(prev => prev.map(obj =>
+            obj.id === currentModelId && obj.type === 'image'
+              ? { ...obj, src: snapshot, transform: { ...obj.transform, opacity: 1 } }
+              : obj
+          ));
+        }
         setShow3DViewer(false);
-        // Wait for state to update
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       
@@ -122,8 +176,13 @@ function AppKonva() {
       await exportAndDownload(stageRef as any, frameMode, frameX, frameY, 'jpeg');
       
       // Reopen if it was open
-      if (wasViewerOpen && activeModelId) {
-        updateOverlayPosition(activeModelId);
+      if (wasViewerOpen && currentModelId) {
+        setObjects(prev => prev.map(obj =>
+          obj.id === currentModelId && obj.type === 'image'
+            ? { ...obj, transform: { ...obj.transform, opacity: 0 } }
+            : obj
+        ));
+        updateOverlayPosition(currentModelId);
         setShow3DViewer(true);
       }
     } catch (error) {
@@ -196,10 +255,11 @@ function AppKonva() {
 
           const img = selectedObject as any;
 
-          // Persist metadata
+          // Persist metadata and hide the image
           setObjects(prev => prev.map(obj => obj.id === img.id ? {
             ...obj,
-            model3D: { modelUrl }
+            model3D: { modelUrl },
+            transform: { ...obj.transform, opacity: 0 }
           } : obj));
 
           setActiveModelId(img.id);
@@ -247,12 +307,20 @@ function AppKonva() {
       console.log('Flattening canvas for AI generation...');
       console.log('Frame position:', { frameX, frameY, frameW, frameH });
       
-      // Temporarily close 3D viewer during export
+      // Capture 3D snapshot and close viewer before export
       const wasViewerOpen = show3DViewer;
       const currentModelId = activeModelId;
-      if (wasViewerOpen) {
+      
+      if (wasViewerOpen && currentModelId) {
+        const snapshot = captureSnapshot();
+        if (snapshot) {
+          setObjects(prev => prev.map(obj =>
+            obj.id === currentModelId && obj.type === 'image'
+              ? { ...obj, src: snapshot, transform: { ...obj.transform, opacity: 1 } }
+              : obj
+          ));
+        }
         setShow3DViewer(false);
-        // Wait for state to update
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       
@@ -265,6 +333,11 @@ function AppKonva() {
 
       // Reopen if it was open
       if (wasViewerOpen && currentModelId) {
+        setObjects(prev => prev.map(obj =>
+          obj.id === currentModelId && obj.type === 'image'
+            ? { ...obj, transform: { ...obj.transform, opacity: 0 } }
+            : obj
+        ));
         updateOverlayPosition(currentModelId);
         setShow3DViewer(true);
       }
@@ -504,7 +577,7 @@ function AppKonva() {
               Converting to 3D...
             </div>
             <div style={{ fontSize: '14px', color: '#666' }}>
-              This may take 30-60 seconds
+              This may take 1-2 minutes
             </div>
             <div
               style={{
@@ -536,6 +609,10 @@ function AppKonva() {
         onClose={handleCloseViewer}
         position={viewer3DPosition || undefined}
         size={viewer3DSize || undefined}
+        intrinsicSize={viewerIntrinsicSize || undefined}
+        onCanvasReady={(canvas) => {
+          threejsCanvasRef.current = canvas;
+        }}
       />
 
     </div>
