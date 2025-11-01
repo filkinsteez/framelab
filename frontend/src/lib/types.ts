@@ -81,6 +81,38 @@ export interface GenerateResponse {
   error?: string;
 }
 
+export interface ImageTo3DRequest {
+  imageUrl: string;
+}
+
+export interface ImageTo3DResponse {
+  success: boolean;
+  data?: {
+    task_id: string;
+    model_mesh: {
+      url: string;
+      content_type: string;
+      file_size: number;
+    } | null;
+    pbr_model?: {
+      url: string;
+      content_type: string;
+      file_size: number;
+    } | null;
+    base_model?: {
+      url: string;
+      content_type: string;
+      file_size: number;
+    } | null;
+    rendered_image: {
+      url: string;
+      content_type: string;
+      file_size: number;
+    } | null;
+  };
+  error?: string;
+}
+
 // ===== Canvas Document =====
 
 export interface CanvasDocument {

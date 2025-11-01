@@ -32,6 +32,9 @@ export interface ImageObject {
     seed?: number;
     timestamp: number;
   };
+  model3D?: {
+    modelUrl: string;
+  };
 }
 
 export interface ShapeObject {
@@ -89,7 +92,16 @@ export interface GalleryObject {
   transform: Transform;
 }
 
-export type CanvasObject = ImageObject | ShapeObject | BrushStroke | TextObject | PromptBoxObject | GalleryObject;
+export interface Model3DObject {
+  id: string;
+  type: 'model3d';
+  modelUrl: string;
+  w: number;
+  h: number;
+  transform: Transform;
+}
+
+export type CanvasObject = ImageObject | ShapeObject | BrushStroke | TextObject | PromptBoxObject | GalleryObject | Model3DObject;
 
 // ===== Viewport State =====
 
@@ -103,8 +115,6 @@ export interface ViewportState {
 export type Tool = 
   | 'select'
   | 'brush'
-  | 'rect'
-  | 'circle'
   | 'triangle'
   | 'text'
   | 'prompt';

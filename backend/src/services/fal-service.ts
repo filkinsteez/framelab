@@ -144,3 +144,89 @@ export async function getGenerationStatus(requestId: string) {
   }
 }
 
+export interface ImageTo3DRequest {
+  imageUrl: string;
+}
+
+export interface ImageTo3DResult {
+  task_id: string;
+  model_mesh: {
+    url: string;
+    content_type: string;
+    file_size: number;
+  } | null;
+  pbr_model?: {
+    url: string;
+    content_type: string;
+    file_size: number;
+  } | null;
+  base_model?: {
+    url: string;
+    content_type: string;
+    file_size: number;
+  } | null;
+  rendered_image: {
+    url: string;
+    content_type: string;
+    file_size: number;
+  } | null;
+}
+
+/**
+ * Convert image to 3D model using Tripo v2.5
+ * Based on: https://fal.ai/models/tripo3d/tripo/v2.5/image-to-3d/api
+ */
+export async function convertImageTo3D(
+  request: ImageTo3DRequest
+): Promise<ImageTo3DResult> {
+  try {
+    console.log('Converting image to 3D with Tripo v2.5...');
+    
+    // Upload image to FAL storage if it's a data URI
+    let imageUrl = request.imageUrl;
+    if (imageUrl.startsWith('data:')) {
+      console.log('Converting data URI to blob and uploading to FAL storage...');
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      imageUrl = await fal.storage.upload(blob);
+      console.log('Uploaded to FAL storage:', imageUrl);
+    }
+    
+    const result = await fal.subscribe('tripo3d/tripo/v2.5/image-to-3d', {
+      input: {
+        image_url: imageUrl,
+        texture: 'HD',
+        pbr: true,
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        console.log('Tripo queue update:', update);
+      },
+    }) as any;
+    
+    console.log('Tripo 3D conversion complete:', JSON.stringify(result, null, 2));
+    
+    // FAL might return data in result.data or directly in result
+    const data = result.data || result;
+    
+    console.log('Extracted data:', JSON.stringify(data, null, 2));
+    
+    if (!data.task_id) {
+      throw new Error('Invalid response from Tripo API - missing task_id');
+    }
+    
+    return {
+      task_id: data.task_id,
+      model_mesh: data.model_mesh || null,
+      pbr_model: data.pbr_model || null,
+      base_model: data.base_model || null,
+      rendered_image: data.rendered_image || null,
+    };
+  } catch (error) {
+    console.error('Tripo 3D conversion error:', error);
+    throw new Error(
+      `3D conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+

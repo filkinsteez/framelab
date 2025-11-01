@@ -14,8 +14,6 @@ import { RenderObject } from './RenderObject';
 import { handleFileDrop } from '../lib/konva-file-utils';
 import { ContextMenu } from './ContextMenu';
 import {
-  createRectangle,
-  createCircle,
   bringToFront,
   sendToBack,
   bringForward,
@@ -178,14 +176,7 @@ export function KonvaCanvas({
 
     if (clickedOnEmpty && insideFrame) {
       // Create object based on current tool
-      switch (currentTool) {
-        case 'rect':
-          setObjects(prev => [...prev, createRectangle(localX, localY)]);
-          return;
-        case 'circle':
-          setObjects(prev => [...prev, createCircle(localX, localY)]);
-          return;
-      }
+      // (No shape tools currently create on click)
     }
 
     // Pan the canvas (only in select mode)
@@ -478,6 +469,7 @@ export function KonvaCanvas({
                 isSelected={selectedIds.includes(obj.id)}
                 onSelect={handleShapeClick}
                 onTransformEnd={handleTransformEnd}
+                currentTool={currentTool}
               />
             ))}
 

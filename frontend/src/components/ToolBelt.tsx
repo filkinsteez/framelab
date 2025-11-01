@@ -7,9 +7,13 @@ interface ToolBeltProps {
   onRedo?: () => void;
   onDelete?: () => void;
   onSave?: () => void;
+  onConvertTo3D?: () => void;
+  onOpen3DViewer?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
   hasSelection?: boolean;
+  hasImageSelected?: boolean;
+  has3DModelSelected?: boolean;
 }
 
 export function ToolBelt({
@@ -19,9 +23,13 @@ export function ToolBelt({
   onRedo,
   onDelete,
   onSave,
+  onConvertTo3D,
+  onOpen3DViewer,
   canUndo = false,
   canRedo = false,
   hasSelection = false,
+  hasImageSelected = false,
+  has3DModelSelected = false,
 }: ToolBeltProps) {
   return (
     <div
@@ -59,18 +67,6 @@ export function ToolBelt({
           active={currentTool === 'brush'}
           onClick={() => onChangeTool('brush')}
           title="Brush (B)"
-        />
-        <ToolButton
-          icon="▢"
-          active={currentTool === 'rect'}
-          onClick={() => onChangeTool('rect')}
-          title="Rectangle (R)"
-        />
-        <ToolButton
-          icon="●"
-          active={currentTool === 'circle'}
-          onClick={() => onChangeTool('circle')}
-          title="Circle (C)"
         />
       </div>
 
@@ -118,6 +114,18 @@ export function ToolBelt({
           title="Delete"
           disabled={!hasSelection}
           danger
+        />
+        <ActionButton
+          icon="🌀"
+          onClick={onOpen3DViewer}
+          title="Edit 3D Model"
+          disabled={!has3DModelSelected}
+        />
+        <ActionButton
+          icon="🎲"
+          onClick={onConvertTo3D}
+          title="Convert Image to 3D"
+          disabled={!hasImageSelected}
         />
         <ActionButton
           icon="💾"

@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Konva from 'konva';
 import { KonvaCanvas } from './components/KonvaCanvas';
 import { TopBar } from './components/TopBar';
 import { ToolBelt } from './components/ToolBelt';
 import { SettingsPanel } from './components/SettingsPanel';
 import { PromptBoxModal } from './components/PromptBoxKonva';
+import { GLBViewer } from './components/GLBViewer';
 import { exportAndDownload, exportFrameAsDataUri } from './lib/konva-export';
 import { FalClient } from './lib/fal-client';
 import { useHistory } from './hooks/useHistory';
@@ -29,6 +30,12 @@ function AppKonva() {
   const [showSettings, setShowSettings] = useState(false);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
+  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [show3DViewer, setShow3DViewer] = useState(false);
+  const [viewer3DPosition, setViewer3DPosition] = useState<{ x: number; y: number } | null>(null);
+  const [viewer3DSize, setViewer3DSize] = useState<{ width: number; height: number } | null>(null);
   
   const stageRef = useRef<Konva.Stage>(null);
 
@@ -40,6 +47,62 @@ function AppKonva() {
   const frameX = viewportWidth / 2 - frameW / 2;
   const frameY = viewportHeight / 2 - frameH / 2;
 
+  const handleCloseViewer = useCallback(() => {
+    setShow3DViewer(false);
+    setModelUrl(null);
+    setActiveModelId(null);
+    setViewer3DPosition(null);
+    setViewer3DSize(null);
+  }, []);
+
+  const updateOverlayPosition = useCallback((objectId: string) => {
+    if (!stageRef.current) return;
+    const imageNode = stageRef.current.findOne(`#${objectId}`);
+    const imageObject = objects.find(obj => obj.id === objectId && obj.type === 'image') as CanvasObject | undefined;
+    if (!imageNode || !imageObject || imageObject.type !== 'image') return;
+
+    const absTransform = imageNode.getAbsoluteTransform();
+    const absPos = absTransform.point({ x: 0, y: 0 });
+    const absScale = imageNode.getAbsoluteScale();
+
+    setViewer3DPosition({ x: absPos.x, y: absPos.y + 60 });
+    setViewer3DSize({ width: imageObject.w * absScale.x, height: imageObject.h * absScale.y });
+  }, [objects]);
+
+  useEffect(() => {
+    if (show3DViewer && activeModelId) {
+      updateOverlayPosition(activeModelId);
+    }
+  }, [show3DViewer, activeModelId, updateOverlayPosition, objects]);
+
+  useEffect(() => {
+    if (!activeModelId) return;
+    const exists = objects.some(obj => obj.id === activeModelId && obj.type === 'image' && obj.model3D);
+    if (!exists) {
+      setShow3DViewer(false);
+      setModelUrl(null);
+      setActiveModelId(null);
+      setViewer3DPosition(null);
+      setViewer3DSize(null);
+    }
+  }, [activeModelId, objects]);
+
+  const selectedObject = useMemo(() => {
+    if (selectedIds.length !== 1) return null;
+    return objects.find(obj => obj.id === selectedIds[0]) || null;
+  }, [selectedIds, objects]);
+
+  const hasImageSelected = selectedObject?.type === 'image';
+  const has3DModelSelected = selectedObject?.type === 'image' && !!selectedObject.model3D;
+
+  const open3DViewerForSelected = useCallback(() => {
+    if (!selectedObject || selectedObject.type !== 'image' || !selectedObject.model3D) return;
+    setActiveModelId(selectedObject.id);
+    setModelUrl(selectedObject.model3D.modelUrl);
+    updateOverlayPosition(selectedObject.id);
+    setShow3DViewer(true);
+  }, [selectedObject, updateOverlayPosition]);
+
   const handleSave = async () => {
     if (!stageRef.current) {
       alert('Canvas not ready');
@@ -47,8 +110,22 @@ function AppKonva() {
     }
     
     try {
+      // Temporarily close 3D viewer during export
+      const wasViewerOpen = show3DViewer;
+      if (wasViewerOpen) {
+        setShow3DViewer(false);
+        // Wait for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
       console.log('Saving as JPEG with frame position:', { frameX, frameY, frameW, frameH });
       await exportAndDownload(stageRef as any, frameMode, frameX, frameY, 'jpeg');
+      
+      // Reopen if it was open
+      if (wasViewerOpen && activeModelId) {
+        updateOverlayPosition(activeModelId);
+        setShow3DViewer(true);
+      }
     } catch (error) {
       console.error('Save failed:', error);
       alert('Save failed. Check console for details.');
@@ -90,6 +167,62 @@ function AppKonva() {
     setFrameMode(mode);
   };
 
+  const handleConvertTo3D = async () => {
+    if (!selectedObject || selectedObject.type !== 'image') {
+      alert('Please select an image to convert to 3D');
+      return;
+    }
+
+    setIsConverting(true);
+
+    try {
+      console.log('Converting image to 3D...');
+      console.log('Image source:', selectedObject.src);
+      
+      const result = await FalClient.convertTo3D({
+        imageUrl: selectedObject.src,
+      });
+
+      console.log('3D conversion result:', result);
+
+      if (result.success && result.data) {
+        console.log('3D conversion data:', result.data);
+        
+        // Check if we have a model URL
+        const modelUrl = result.data.model_mesh?.url || result.data.pbr_model?.url || result.data.base_model?.url;
+        
+        if (modelUrl) {
+          console.log('3D conversion successful! Model URL:', modelUrl);
+
+          const img = selectedObject as any;
+
+          // Persist metadata
+          setObjects(prev => prev.map(obj => obj.id === img.id ? {
+            ...obj,
+            model3D: { modelUrl }
+          } : obj));
+
+          setActiveModelId(img.id);
+          setModelUrl(modelUrl);
+          updateOverlayPosition(img.id);
+          setShow3DViewer(true);
+          setSelectedIds([img.id]);
+        } else {
+          console.error('No model URL found in response:', result.data);
+          alert('3D conversion succeeded but no model file was returned. Please try again.');
+        }
+      } else {
+        console.error('3D conversion failed:', result);
+        alert(`3D conversion failed: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('3D conversion failed:', error);
+      alert(`3D conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
 
   const handleOpenPrompt = () => {
     console.log('Opening prompt dialog');
@@ -114,12 +247,27 @@ function AppKonva() {
       console.log('Flattening canvas for AI generation...');
       console.log('Frame position:', { frameX, frameY, frameW, frameH });
       
+      // Temporarily close 3D viewer during export
+      const wasViewerOpen = show3DViewer;
+      const currentModelId = activeModelId;
+      if (wasViewerOpen) {
+        setShow3DViewer(false);
+        // Wait for state to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
       const canvasDataUri = await exportFrameAsDataUri(
         stageRef as any,
         frameMode,
         frameX,
         frameY
       );
+
+      // Reopen if it was open
+      if (wasViewerOpen && currentModelId) {
+        updateOverlayPosition(currentModelId);
+        setShow3DViewer(true);
+      }
       
       console.log('Canvas data URI created, length:', canvasDataUri?.length || 0);
 
@@ -229,9 +377,13 @@ function AppKonva() {
         onRedo={redo}
         onDelete={handleDelete}
         onSave={handleSave}
+        onConvertTo3D={handleConvertTo3D}
+        onOpen3DViewer={open3DViewerForSelected}
         canUndo={canUndo}
         canRedo={canRedo}
         hasSelection={selectedIds.length > 0}
+        hasImageSelected={hasImageSelected}
+        has3DModelSelected={has3DModelSelected}
       />
 
       <SettingsPanel visible={showSettings} onClose={() => setShowSettings(false)} />
@@ -323,6 +475,68 @@ function AppKonva() {
           </div>
         </div>
       )}
+
+      {/* Loading overlay during 3D conversion */}
+      {isConverting && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9998,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              padding: '32px 48px',
+              borderRadius: '12px',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px' }}>
+              Converting to 3D...
+            </div>
+            <div style={{ fontSize: '14px', color: '#666' }}>
+              This may take 30-60 seconds
+            </div>
+            <div
+              style={{
+                marginTop: '16px',
+                width: '200px',
+                height: '4px',
+                backgroundColor: '#e0e0e0',
+                borderRadius: '2px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: '#2196F3',
+                  animation: 'loading 1.5s infinite',
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3D Model Viewer Overlay */}
+      <GLBViewer
+        modelUrl={modelUrl}
+        visible={show3DViewer}
+        onClose={handleCloseViewer}
+        position={viewer3DPosition || undefined}
+        size={viewer3DSize || undefined}
+      />
 
     </div>
   );

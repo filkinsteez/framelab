@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { generateImages, getGenerationStatus } from '../services/fal-service.js';
+import { generateImages, getGenerationStatus, convertImageTo3D } from '../services/fal-service.js';
 
 const router = Router();
 
@@ -69,6 +69,38 @@ router.get('/generate/:requestId', async (req: Request, res: Response) => {
     console.error('Status check error:', error);
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Status check failed',
+    });
+  }
+});
+
+/**
+ * POST /api/convert-to-3d
+ * Convert an image to a 3D model using Tripo v2.5
+ */
+router.post('/convert-to-3d', async (req: Request, res: Response) => {
+  try {
+    const { imageUrl } = req.body;
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      return res.status(400).json({
+        error: 'Image URL is required and must be a string',
+      });
+    }
+
+    console.log('=== IMAGE TO 3D REQUEST ===');
+    console.log('Has imageUrl:', !!imageUrl);
+    console.log('ImageUrl length:', imageUrl.length);
+
+    const result = await convertImageTo3D({ imageUrl });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('3D conversion error:', error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : '3D conversion failed',
     });
   }
 });
