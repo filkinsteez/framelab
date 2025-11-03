@@ -150,6 +150,7 @@ export function KonvaCanvas({
     }
 
     const clickedOnEmpty = e.target === e.target.getStage();
+    const clickedOnFrame = e.target.name() === 'frame-background';
     const stage = e.target.getStage();
     if (!stage) return;
 
@@ -179,11 +180,15 @@ export function KonvaCanvas({
       // (No shape tools currently create on click)
     }
 
-    // Pan the canvas (only in select mode)
-    if (currentTool === 'select' && clickedOnEmpty) {
-      setIsDraggingCanvas(true);
-      setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
+    // Deselect when clicking on empty canvas or frame background
+    if (currentTool === 'select' && (clickedOnEmpty || clickedOnFrame)) {
       setSelectedIds([]);
+      
+      // Pan the canvas only when clicking on empty stage (not frame)
+      if (clickedOnEmpty) {
+        setIsDraggingCanvas(true);
+        setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
+      }
     }
   }, [currentTool, frameX, frameY, frameW, frameH, selectedIds, setObjects, setSelectedIds]);
 
@@ -304,12 +309,12 @@ export function KonvaCanvas({
     }
   }, [currentTool, setSelectedIds]);
 
-  // Handle object transform with snapping
-  const handleTransformEnd = useCallback((id: string) => {
+  // Handle drag move with real-time snapping and guides
+  const handleDragMove = useCallback((id: string, e: Konva.KonvaEventObject<DragEvent>) => {
     const stage = stageRef.current;
     if (!stage) return;
 
-    const node = stage.findOne(`#${id}`) as Konva.Shape;
+    const node = e.target as Konva.Shape;
     if (!node) return;
 
     const obj = objects.find(o => o.id === id);
@@ -329,7 +334,28 @@ export function KonvaCanvas({
       frameH
     );
 
-    // Update object with snapped position
+    // Apply snap to node position in real-time
+    node.position({ x: snapResult.x, y: snapResult.y });
+
+    // Show guides in real-time during drag
+    setSnapGuides({
+      showVerticalCenter: snapResult.showVerticalCenterGuide,
+      showHorizontalCenter: snapResult.showHorizontalCenterGuide,
+    });
+  }, [objects, frameW, frameH]);
+
+  // Handle object transform end - save final position
+  const handleTransformEnd = useCallback((id: string) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const node = stage.findOne(`#${id}`) as Konva.Shape;
+    if (!node) return;
+
+    const obj = objects.find(o => o.id === id);
+    if (!obj) return;
+
+    // Update object with final position
     setObjects(prev =>
       prev.map(o =>
         o.id === id
@@ -337,8 +363,8 @@ export function KonvaCanvas({
               ...o,
               transform: {
                 ...o.transform,
-                x: snapResult.x,
-                y: snapResult.y,
+                x: node.x(),
+                y: node.y(),
                 scale: node.scaleX(),
                 rotation: node.rotation(),
               },
@@ -347,23 +373,9 @@ export function KonvaCanvas({
       )
     );
 
-    // Update node position if snapped
-    if (snapResult.x !== node.x() || snapResult.y !== node.y()) {
-      node.position({ x: snapResult.x, y: snapResult.y });
-      node.getLayer()?.batchDraw();
-    }
-
-    // Show guides if snapped to center
-    setSnapGuides({
-      showVerticalCenter: snapResult.snappedToVerticalCenter,
-      showHorizontalCenter: snapResult.snappedToHorizontalCenter,
-    });
-
-    // Hide guides after a delay
-    setTimeout(() => {
-      setSnapGuides({ showVerticalCenter: false, showHorizontalCenter: false });
-    }, 1000);
-  }, [setObjects, objects, frameW, frameH]);
+    // Hide guides immediately on drag end
+    setSnapGuides({ showVerticalCenter: false, showHorizontalCenter: false });
+  }, [setObjects, objects]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -442,6 +454,7 @@ export function KonvaCanvas({
         <Layer>
           {/* Frame background */}
           <Rect
+            name="frame-background"
             x={frameX}
             y={frameY}
             width={frameW}
@@ -468,6 +481,7 @@ export function KonvaCanvas({
                 object={obj}
                 isSelected={selectedIds.includes(obj.id)}
                 onSelect={handleShapeClick}
+                onDragMove={handleDragMove}
                 onTransformEnd={handleTransformEnd}
                 currentTool={currentTool}
               />

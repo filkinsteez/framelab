@@ -8,24 +8,25 @@ interface RenderObjectProps {
   object: CanvasObject;
   isSelected: boolean;
   onSelect: (id: string, e: Konva.KonvaEventObject<MouseEvent>) => void;
+  onDragMove: (id: string, e: Konva.KonvaEventObject<DragEvent>) => void;
   onTransformEnd: (id: string) => void;
   currentTool: Tool;
 }
 
-export function RenderObject({ object, isSelected, onSelect, onTransformEnd, currentTool }: RenderObjectProps) {
+export function RenderObject({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   switch (object.type) {
     case 'image':
-      return <ImageRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <ImageRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'rect':
-      return <RectRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <RectRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'circle':
-      return <CircleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <CircleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'triangle':
-      return <TriangleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <TriangleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'brush':
-      return <BrushRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <BrushRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'text':
-      return <TextRenderer object={object} isSelected={isSelected} onSelect={onSelect} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <TextRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'model3d':
       // Not used - 3D viewer is now an overlay, not embedded in canvas
       return null;
@@ -40,8 +41,10 @@ export function RenderObject({ object, isSelected, onSelect, onTransformEnd, cur
 
 // ===== Image Renderer =====
 
-function ImageRenderer({ object, onSelect, onTransformEnd, currentTool }: RenderObjectProps) {
+function ImageRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   const [image] = useImage(object.type === 'image' ? object.src : '');
+  const [isHovering, setIsHovering] = React.useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
 
   if (object.type !== 'image') return null;
 
@@ -74,16 +77,38 @@ function ImageRenderer({ object, onSelect, onTransformEnd, currentTool }: Render
         draggable={currentTool === 'select'}
         onClick={(e) => onSelect(object.id, e)}
         onTap={(e) => onSelect(object.id, e as any)}
-        onDragEnd={() => onTransformEnd(object.id)}
+        onDragStart={() => setIsDragging(true)}
+        onDragMove={(e) => onDragMove(object.id, e)}
+        onDragEnd={() => {
+          setIsDragging(false);
+          onTransformEnd(object.id);
+        }}
         onTransformEnd={() => onTransformEnd(object.id)}
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => setIsHovering(false)}
       />
+      {/* Hover border - hide when dragging */}
+      {isHovering && !isDragging && (
+        <Rect
+          x={object.transform.x}
+          y={object.transform.y}
+          width={object.w}
+          height={object.h}
+          scaleX={object.transform.scale}
+          scaleY={object.transform.scale}
+          rotation={object.transform.rotation}
+          stroke="#2196F3"
+          strokeWidth={3}
+          listening={false}
+        />
+      )}
     </Group>
   );
 }
 
 // ===== Rect Renderer =====
 
-function RectRenderer({ object, onSelect, onTransformEnd, currentTool }: RenderObjectProps) {
+function RectRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   if (object.type !== 'rect') return null;
 
   return (
@@ -111,7 +136,7 @@ function RectRenderer({ object, onSelect, onTransformEnd, currentTool }: RenderO
 
 // ===== Circle Renderer =====
 
-function CircleRenderer({ object, onSelect, onTransformEnd, currentTool }: RenderObjectProps) {
+function CircleRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   if (object.type !== 'circle') return null;
 
   return (
@@ -138,7 +163,7 @@ function CircleRenderer({ object, onSelect, onTransformEnd, currentTool }: Rende
 
 // ===== Triangle Renderer =====
 
-function TriangleRenderer({ object, onSelect, onTransformEnd, currentTool }: RenderObjectProps) {
+function TriangleRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   if (object.type !== 'triangle') return null;
 
   const points = [
@@ -172,7 +197,7 @@ function TriangleRenderer({ object, onSelect, onTransformEnd, currentTool }: Ren
 
 // ===== Brush Renderer =====
 
-function BrushRenderer({ object, onSelect, onTransformEnd, currentTool }: RenderObjectProps) {
+function BrushRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   if (object.type !== 'brush') return null;
 
   return (
@@ -202,7 +227,7 @@ function BrushRenderer({ object, onSelect, onTransformEnd, currentTool }: Render
 
 // ===== Text Renderer =====
 
-function TextRenderer({ object, onSelect, onTransformEnd, currentTool }: RenderObjectProps) {
+function TextRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   if (object.type !== 'text') return null;
 
   return (

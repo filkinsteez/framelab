@@ -141,12 +141,23 @@ export async function exportFrameAsDataUri(
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
-        console.log('Exported canvas dimensions:', {
+        const exportedDims = {
           width: img.width,
           height: img.height,
           aspectRatio: (img.width / img.height).toFixed(2),
           expected: { width: w, height: h, aspectRatio: (w / h).toFixed(2) }
-        });
+        };
+        console.log('Exported canvas dimensions:', exportedDims);
+        
+        // Check if dimensions match expected
+        if (img.width !== w || img.height !== h) {
+          console.error('⚠️ DIMENSION MISMATCH!', {
+            exported: { w: img.width, h: img.height },
+            expected: { w, h },
+            difference: { w: img.width - w, h: img.height - h }
+          });
+        }
+        
         resolve(dataURL);
       };
       img.onerror = () => {

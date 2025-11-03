@@ -2,7 +2,8 @@
  * Snapping utilities for Konva canvas
  */
 
-const SNAP_THRESHOLD = 5; // pixels
+const SNAP_THRESHOLD = 10; // pixels - distance to actually snap
+const GUIDE_THRESHOLD = 50; // pixels - distance to show guide lines
 
 export interface SnapResult {
   x: number;
@@ -13,6 +14,8 @@ export interface SnapResult {
   snappedToRight: boolean;
   snappedToTop: boolean;
   snappedToBottom: boolean;
+  showVerticalCenterGuide: boolean;
+  showHorizontalCenterGuide: boolean;
 }
 
 /**
@@ -38,6 +41,8 @@ export function snapToFrame(
     snappedToRight: false,
     snappedToTop: false,
     snappedToBottom: false,
+    showVerticalCenterGuide: false,
+    showHorizontalCenterGuide: false,
   };
 
   // Calculate object center
@@ -49,13 +54,29 @@ export function snapToFrame(
   const frameCenterY = frameH / 2;
 
   // Snap to vertical center
-  if (Math.abs(objectCenterX - frameCenterX) < SNAP_THRESHOLD) {
+  const verticalCenterDist = Math.abs(objectCenterX - frameCenterX);
+  
+  // Show guide if within guide threshold
+  if (verticalCenterDist < GUIDE_THRESHOLD) {
+    result.showVerticalCenterGuide = true;
+  }
+  
+  // Actually snap if within snap threshold
+  if (verticalCenterDist < SNAP_THRESHOLD) {
     snappedX = frameCenterX - objectWidth / 2;
     result.snappedToVerticalCenter = true;
   }
 
   // Snap to horizontal center
-  if (Math.abs(objectCenterY - frameCenterY) < SNAP_THRESHOLD) {
+  const horizontalCenterDist = Math.abs(objectCenterY - frameCenterY);
+  
+  // Show guide if within guide threshold
+  if (horizontalCenterDist < GUIDE_THRESHOLD) {
+    result.showHorizontalCenterGuide = true;
+  }
+  
+  // Actually snap if within snap threshold
+  if (horizontalCenterDist < SNAP_THRESHOLD) {
     snappedY = frameCenterY - objectHeight / 2;
     result.snappedToHorizontalCenter = true;
   }

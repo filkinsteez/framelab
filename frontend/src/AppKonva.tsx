@@ -306,6 +306,13 @@ function AppKonva() {
       // Flatten canvas
       console.log('Flattening canvas for AI generation...');
       console.log('Frame position:', { frameX, frameY, frameW, frameH });
+      console.log('Objects on canvas:', objects.map(obj => ({
+        id: obj.id,
+        type: obj.type,
+        transform: obj.transform,
+        w: 'w' in obj ? obj.w : undefined,
+        h: 'h' in obj ? obj.h : undefined,
+      })));
       
       // Capture 3D snapshot and close viewer before export
       const wasViewerOpen = show3DViewer;
@@ -359,59 +366,65 @@ function AppKonva() {
       if (result.success && result.data && result.data.images.length > 0) {
         console.log('Generation successful!', result.data);
         
-        const img = result.data.images[0]; // Take the first (and only) image
+        const imgData = result.data.images[0];
         
-        const imgAspect = img.width / img.height;
-        const frameAspect = frameW / frameH;
-        
-        console.log('Received image:', {
-          url: img.url.substring(0, 50) + '...',
-          width: img.width,
-          height: img.height,
-          aspectRatio: imgAspect.toFixed(3),
-        });
-        
-        console.log('Frame:', {
-          width: frameW,
-          height: frameH,
-          aspectRatio: frameAspect.toFixed(3),
-        });
-        
-        // SIMPLE APPROACH: Just render the image at exactly the frame size
-        // Set w/h to frame dimensions and scale to 1
-        // This way it fills the frame perfectly regardless of source image size
-        const newImage: CanvasObject = {
-          id: `img_${Date.now()}`,
-          type: 'image',
-          src: img.url,
-          w: frameW,  // Set to frame width
-          h: frameH,  // Set to frame height
-          transform: {
-            x: 0,  // Top-left of frame
-            y: 0,
-            scale: 1,  // No additional scaling needed
-            rotation: 0,
-            opacity: 1,
-            zIndex: Date.now(),
-          },
-          generationParams: {
-            prompt,
-            seed: result.data.seed,
-            timestamp: Date.now(),
-          },
+        // Load the image to get actual dimensions since API doesn't return them
+        const img = new Image();
+        img.onload = () => {
+          console.log('Loaded image actual dimensions:', {
+            url: imgData.url.substring(0, 50) + '...',
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            aspectRatio: (img.naturalWidth / img.naturalHeight).toFixed(3),
+          });
+          
+          console.log('Frame:', {
+            width: frameW,
+            height: frameH,
+            aspectRatio: (frameW / frameH).toFixed(3),
+          });
+          
+          // Just render at frame size - Konva will scale the image to fit
+          const newImage: CanvasObject = {
+            id: `img_${Date.now()}`,
+            type: 'image',
+            src: imgData.url,
+            w: frameW,  // Render at frame size
+            h: frameH,
+            transform: {
+              x: 0,
+              y: 0,
+              scale: 1,
+              rotation: 0,
+              opacity: 1,
+              zIndex: Date.now(),
+            },
+            generationParams: {
+              prompt,
+              seed: result.data.seed,
+              timestamp: Date.now(),
+            },
+          };
+          
+          console.log('Created image to fill frame:', {
+            imageUrl: imgData.url,
+            naturalSize: { w: img.naturalWidth, h: img.naturalHeight },
+            renderSize: { w: frameW, h: frameH },
+            scale: 1,
+            position: { x: 0, y: 0 },
+          });
+
+          // REPLACE entire canvas with just this one image
+          console.log('CLEARING canvas and replacing with single generated image');
+          setObjects([newImage]);
         };
         
-        console.log('Created image to fill frame:', {
-          imageUrl: img.url,
-          storedSize: { w: frameW, h: frameH },
-          scale: 1,
-          position: { x: 0, y: 0 },
-          note: 'Image will fill entire frame',
-        });
-
-        // REPLACE entire canvas with just this one image
-        console.log('CLEARING canvas and replacing with single generated image');
-        setObjects([newImage]);
+        img.onerror = () => {
+          console.error('Failed to load generated image');
+          alert('Failed to load generated image');
+        };
+        
+        img.src = imgData.url;
       } else {
         console.error('Generation failed or no data:', result);
       }
