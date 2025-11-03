@@ -25,6 +25,8 @@ export function RenderObject({ object, isSelected, onSelect, onDragMove, onTrans
       return <TriangleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'brush':
       return <BrushRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+    case 'arrow':
+      return <ArrowRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'text':
       return <TextRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
     case 'model3d':
@@ -200,17 +202,19 @@ function TriangleRenderer({ object, onSelect, onDragMove, onTransformEnd, curren
 function BrushRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
   if (object.type !== 'brush') return null;
 
+  // Calculate bounding box from points
+  const xs = object.points.filter((_, i) => i % 2 === 0);
+  const ys = object.points.filter((_, i) => i % 2 === 1);
+  const minX = Math.min(...xs) - 20;
+  const minY = Math.min(...ys) - 20;
+  const maxX = Math.max(...xs) + 20;
+  const maxY = Math.max(...ys) + 20;
+  const width = maxX - minX;
+  const height = maxY - minY;
+
   return (
-    <Line
+    <Group
       id={object.id}
-      points={object.points}
-      stroke={object.color}
-      strokeWidth={object.size}
-      opacity={object.opacity}
-      tension={0.5}
-      lineCap="round"
-      lineJoin="round"
-      globalCompositeOperation="source-over"
       x={object.transform.x}
       y={object.transform.y}
       scaleX={object.transform.scale}
@@ -219,9 +223,103 @@ function BrushRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
       draggable={currentTool === 'select'}
       onClick={(e) => onSelect(object.id, e)}
       onTap={(e) => onSelect(object.id, e as any)}
+      onDragMove={(e) => onDragMove(object.id, e)}
       onDragEnd={() => onTransformEnd(object.id)}
       onTransformEnd={() => onTransformEnd(object.id)}
-    />
+    >
+      {/* Invisible bounding box for easier selection/dragging */}
+      <Rect
+        x={minX}
+        y={minY}
+        width={width}
+        height={height}
+        fill="transparent"
+      />
+      {/* The actual brush stroke */}
+      <Line
+        points={object.points}
+        stroke={object.color}
+        strokeWidth={object.size}
+        opacity={object.opacity}
+        tension={0.5}
+        lineCap="round"
+        lineJoin="round"
+        globalCompositeOperation="source-over"
+        listening={false}
+      />
+    </Group>
+  );
+}
+
+// ===== Arrow Renderer =====
+
+function ArrowRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+  if (object.type !== 'arrow') return null;
+
+  const [x1, y1, x2, y2] = object.points;
+
+  // Calculate bounding box
+  const minX = Math.min(x1, x2) - 30;
+  const minY = Math.min(y1, y2) - 30;
+  const maxX = Math.max(x1, x2) + 30;
+  const maxY = Math.max(y1, y2) + 30;
+  const width = maxX - minX;
+  const height = maxY - minY;
+
+  return (
+    <Group
+      id={object.id}
+      x={object.transform.x}
+      y={object.transform.y}
+      scaleX={object.transform.scale}
+      scaleY={object.transform.scale}
+      rotation={object.transform.rotation}
+      draggable={currentTool === 'select'}
+      onClick={(e) => onSelect(object.id, e)}
+      onTap={(e) => onSelect(object.id, e as any)}
+      onDragMove={(e) => onDragMove(object.id, e)}
+      onDragEnd={() => onTransformEnd(object.id)}
+      onTransformEnd={() => onTransformEnd(object.id)}
+    >
+      {/* Invisible bounding box for easier selection/dragging */}
+      <Rect
+        x={minX}
+        y={minY}
+        width={width}
+        height={height}
+        fill="transparent"
+      />
+      {/* The actual arrow line */}
+      <Line
+        points={[x1, y1, x2, y2]}
+        stroke={object.color}
+        strokeWidth={object.strokeWidth}
+        lineCap="round"
+        listening={false}
+      />
+      {/* Arrow head (triangle at end) */}
+      <Line
+        points={(() => {
+          // Calculate arrow head triangle
+          const angle = Math.atan2(y2 - y1, x2 - x1);
+          const headLength = 25;
+          
+          // Two points for the arrow head
+          const point1X = x2 - headLength * Math.cos(angle - Math.PI / 6);
+          const point1Y = y2 - headLength * Math.sin(angle - Math.PI / 6);
+          const point2X = x2 - headLength * Math.cos(angle + Math.PI / 6);
+          const point2Y = y2 - headLength * Math.sin(angle + Math.PI / 6);
+          
+          return [point1X, point1Y, x2, y2, point2X, point2Y];
+        })()}
+        stroke={object.color}
+        strokeWidth={object.strokeWidth}
+        lineCap="round"
+        lineJoin="round"
+        closed={false}
+        listening={false}
+      />
+    </Group>
   );
 }
 

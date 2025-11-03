@@ -68,6 +68,12 @@ export function ToolBelt({
           onClick={() => onChangeTool('brush')}
           title="Brush (B)"
         />
+        <ToolButton
+          icon="➡️"
+          active={currentTool === 'arrow'}
+          onClick={() => onChangeTool('arrow')}
+          title="Arrow (A)"
+        />
       </div>
 
       {/* Middle section - Undo/Redo */}

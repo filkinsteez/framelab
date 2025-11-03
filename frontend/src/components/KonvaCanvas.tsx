@@ -66,6 +66,10 @@ export function KonvaCanvas({
   
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentBrushPoints, setCurrentBrushPoints] = useState<number[]>([]);
+  const [currentArrowPoints, setCurrentArrowPoints] = useState<number[]>([]);
+  const [isMarqueeSelecting, setIsMarqueeSelecting] = useState(false);
+  const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null);
+  const [marqueeEnd, setMarqueeEnd] = useState<{ x: number; y: number } | null>(null);
 
   // Get frame dimensions
   const { w: frameW, h: frameH } = FRAME_SPECS[frameMode];
@@ -175,19 +179,34 @@ export function KonvaCanvas({
       return;
     }
 
+    // Arrow tool - start drawing
+    if (currentTool === 'arrow') {
+      if (insideFrame) {
+        setIsDrawing(true);
+        // Store start point
+        setCurrentArrowPoints([localX, localY, localX, localY]);
+      }
+      return;
+    }
+
     if (clickedOnEmpty && insideFrame) {
       // Create object based on current tool
       // (No shape tools currently create on click)
     }
 
-    // Deselect when clicking on empty canvas or frame background
+    // Marquee select or pan in select mode
     if (currentTool === 'select' && (clickedOnEmpty || clickedOnFrame)) {
-      setSelectedIds([]);
-      
-      // Pan the canvas only when clicking on empty stage (not frame)
-      if (clickedOnEmpty) {
+      // Start marquee selection if clicking inside frame
+      if (clickedOnFrame && insideFrame) {
+        setIsMarqueeSelecting(true);
+        setMarqueeStart({ x: localX, y: localY });
+        setMarqueeEnd({ x: localX, y: localY });
+        setSelectedIds([]); // Clear selection when starting marquee
+      } else if (clickedOnEmpty) {
+        // Pan the canvas when clicking outside frame
         setIsDraggingCanvas(true);
         setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
+        setSelectedIds([]);
       }
     }
   }, [currentTool, frameX, frameY, frameW, frameH, selectedIds, setObjects, setSelectedIds]);
@@ -213,6 +232,31 @@ export function KonvaCanvas({
       return;
     }
 
+    // Drawing with arrow
+    if (isDrawing && currentTool === 'arrow') {
+      const pointerPos = stage.getRelativePointerPosition();
+      if (!pointerPos) return;
+
+      const localX = pointerPos.x - frameX;
+      const localY = pointerPos.y - frameY;
+
+      // Update end point of arrow
+      setCurrentArrowPoints(prev => [prev[0], prev[1], localX, localY]);
+      return;
+    }
+
+    // Marquee selection
+    if (isMarqueeSelecting && currentTool === 'select') {
+      const pointerPos = stage.getRelativePointerPosition();
+      if (!pointerPos) return;
+
+      const localX = pointerPos.x - frameX;
+      const localY = pointerPos.y - frameY;
+
+      setMarqueeEnd({ x: localX, y: localY });
+      return;
+    }
+
     // Panning canvas
     if (isDraggingCanvas) {
       const dx = e.evt.clientX - dragStart.x;
@@ -228,7 +272,7 @@ export function KonvaCanvas({
 
       setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
     }
-  }, [isDraggingCanvas, dragStart, isDrawing, currentTool, frameX, frameY, frameW, frameH]);
+  }, [isDraggingCanvas, dragStart, isDrawing, isMarqueeSelecting, currentTool, frameX, frameY, frameW, frameH]);
 
   const handleMouseUp = useCallback(() => {
     // Finish brush stroke
@@ -254,9 +298,89 @@ export function KonvaCanvas({
       setCurrentBrushPoints([]);
     }
 
+    // Finish arrow
+    if (isDrawing && currentArrowPoints.length === 4) {
+      const [x1, y1, x2, y2] = currentArrowPoints;
+      // Only create if arrow has some length
+      const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+      if (length > 10) {
+        const newArrow: CanvasObject = {
+          id: generateId(),
+          type: 'arrow',
+          points: currentArrowPoints,
+          color: '#FF0000', // Red
+          strokeWidth: 6,
+          transform: {
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0,
+            opacity: 1,
+            zIndex: Date.now() + 9999999, // Max z-index (draw over everything)
+          },
+        };
+        setObjects(prev => [...prev, newArrow]);
+      }
+      setCurrentArrowPoints([]);
+    }
+
+    // Finish marquee selection
+    if (isMarqueeSelecting && marqueeStart && marqueeEnd) {
+      const x1 = Math.min(marqueeStart.x, marqueeEnd.x);
+      const y1 = Math.min(marqueeStart.y, marqueeEnd.y);
+      const x2 = Math.max(marqueeStart.x, marqueeEnd.x);
+      const y2 = Math.max(marqueeStart.y, marqueeEnd.y);
+
+      // Find all objects that intersect with the marquee rectangle
+      const selectedObjects = objects.filter(obj => {
+        let objX, objY, objW, objH;
+
+        // Calculate bounding box based on object type
+        if ('w' in obj && 'h' in obj) {
+          // Images, shapes, text
+          objX = obj.transform.x;
+          objY = obj.transform.y;
+          objW = obj.w * obj.transform.scale;
+          objH = obj.h * obj.transform.scale;
+        } else if (obj.type === 'brush') {
+          // Brush strokes - calculate from points
+          const xs = obj.points.filter((_, i) => i % 2 === 0);
+          const ys = obj.points.filter((_, i) => i % 2 === 1);
+          objX = Math.min(...xs) + obj.transform.x;
+          objY = Math.min(...ys) + obj.transform.y;
+          objW = (Math.max(...xs) - Math.min(...xs)) * obj.transform.scale;
+          objH = (Math.max(...ys) - Math.min(...ys)) * obj.transform.scale;
+        } else if (obj.type === 'arrow') {
+          // Arrows - calculate from two points
+          const [x1p, y1p, x2p, y2p] = obj.points;
+          objX = Math.min(x1p, x2p) + obj.transform.x;
+          objY = Math.min(y1p, y2p) + obj.transform.y;
+          objW = Math.abs(x2p - x1p) * obj.transform.scale;
+          objH = Math.abs(y2p - y1p) * obj.transform.scale;
+        } else {
+          return false;
+        }
+
+        // Check if object bounding box intersects with marquee
+        const intersects = !(
+          objX + objW < x1 ||
+          objX > x2 ||
+          objY + objH < y1 ||
+          objY > y2
+        );
+
+        return intersects;
+      });
+
+      setSelectedIds(selectedObjects.map(obj => obj.id));
+      setIsMarqueeSelecting(false);
+      setMarqueeStart(null);
+      setMarqueeEnd(null);
+    }
+
     setIsDrawing(false);
     setIsDraggingCanvas(false);
-  }, [isDrawing, currentBrushPoints, setObjects]);
+  }, [isDrawing, currentBrushPoints, currentArrowPoints, isMarqueeSelecting, marqueeStart, marqueeEnd, objects, setObjects, setSelectedIds]);
 
   // Handle file drops
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -488,7 +612,7 @@ export function KonvaCanvas({
             ))}
 
             {/* Current brush stroke being drawn */}
-            {isDrawing && currentBrushPoints.length > 2 && (
+            {isDrawing && currentTool === 'brush' && currentBrushPoints.length > 2 && (
               <Line
                 points={currentBrushPoints}
                 stroke="#FF0000"
@@ -499,6 +623,60 @@ export function KonvaCanvas({
                 listening={false}
               />
             )}
+
+            {/* Current arrow being drawn */}
+            {isDrawing && currentTool === 'arrow' && currentArrowPoints.length === 4 && (() => {
+              const [x1, y1, x2, y2] = currentArrowPoints;
+              const angle = Math.atan2(y2 - y1, x2 - x1);
+              const headLength = 25;
+              
+              const point1X = x2 - headLength * Math.cos(angle - Math.PI / 6);
+              const point1Y = y2 - headLength * Math.sin(angle - Math.PI / 6);
+              const point2X = x2 - headLength * Math.cos(angle + Math.PI / 6);
+              const point2Y = y2 - headLength * Math.sin(angle + Math.PI / 6);
+              
+              return (
+                <>
+                  <Line
+                    points={[x1, y1, x2, y2]}
+                    stroke="#FF0000"
+                    strokeWidth={6}
+                    lineCap="round"
+                    listening={false}
+                  />
+                  <Line
+                    points={[point1X, point1Y, x2, y2, point2X, point2Y]}
+                    stroke="#FF0000"
+                    strokeWidth={6}
+                    lineCap="round"
+                    lineJoin="round"
+                    listening={false}
+                  />
+                </>
+              );
+            })()}
+
+            {/* Marquee selection box */}
+            {isMarqueeSelecting && marqueeStart && marqueeEnd && (() => {
+              const x = Math.min(marqueeStart.x, marqueeEnd.x);
+              const y = Math.min(marqueeStart.y, marqueeEnd.y);
+              const width = Math.abs(marqueeEnd.x - marqueeStart.x);
+              const height = Math.abs(marqueeEnd.y - marqueeStart.y);
+              
+              return (
+                <Rect
+                  x={x}
+                  y={y}
+                  width={width}
+                  height={height}
+                  stroke="#2196F3"
+                  strokeWidth={2}
+                  dash={[5, 5]}
+                  fill="rgba(33, 150, 243, 0.1)"
+                  listening={false}
+                />
+              );
+            })()}
           </Group>
 
           {/* Frame border */}
@@ -542,6 +720,9 @@ export function KonvaCanvas({
 
           <Transformer
             ref={transformerRef}
+            rotateAnchorOffset={30}
+            ignoreStroke={false}
+            shouldOverdrawWholeArea={true}
             boundBoxFunc={(oldBox, newBox) => {
               // Prevent scaling to negative or zero
               if (newBox.width < 5 || newBox.height < 5) {

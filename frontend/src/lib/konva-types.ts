@@ -58,6 +58,15 @@ export interface BrushStroke {
   transform: Transform;
 }
 
+export interface ArrowObject {
+  id: string;
+  type: 'arrow';
+  points: number[]; // [x1, y1, x2, y2] - start and end points
+  color: string;
+  strokeWidth: number;
+  transform: Transform;
+}
+
 export interface TextObject {
   id: string;
   type: 'text';
@@ -101,7 +110,7 @@ export interface Model3DObject {
   transform: Transform;
 }
 
-export type CanvasObject = ImageObject | ShapeObject | BrushStroke | TextObject | PromptBoxObject | GalleryObject | Model3DObject;
+export type CanvasObject = ImageObject | ShapeObject | BrushStroke | ArrowObject | TextObject | PromptBoxObject | GalleryObject | Model3DObject;
 
 // ===== Viewport State =====
 
@@ -115,6 +124,7 @@ export interface ViewportState {
 export type Tool = 
   | 'select'
   | 'brush'
+  | 'arrow'
   | 'triangle'
   | 'text'
   | 'prompt';
