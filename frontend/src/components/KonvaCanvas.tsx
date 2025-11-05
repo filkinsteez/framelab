@@ -979,11 +979,13 @@ export function KonvaCanvas({
                   width={frameW}
                   height={frameH}
                   fill="white"
-                  stroke={isActive ? '#2196F3' : '#333'}
-                  strokeWidth={isActive ? 4 : 2}
-                  shadowColor="black"
-                  shadowBlur={20}
-                  shadowOpacity={0.3}
+                  stroke={isActive ? '#1610ff' : '#333'}
+                  strokeWidth={isActive ? 3 : 2}
+                  shadowColor="#11111a"
+                  shadowBlur={16}
+                  shadowOpacity={0.1}
+                  shadowOffsetX={0}
+                  shadowOffsetY={4}
                   onClick={() => onFrameActivate?.(frame.id)}
                 />
                 
@@ -994,16 +996,29 @@ export function KonvaCanvas({
                   text={frame.customLabel || `Frame ${frame.frameNumber}`}
                   fontSize={24}
                   fontFamily="Arial"
-                  fill={isActive ? '#2196F3' : '#333'}
+                  fill={isActive ? '#1610ff' : '#333'}
                   fontStyle="normal"
                   visible={editingFrameId !== frame.id}
+                  onClick={() => {
+                    // Single click: activate frame
+                    onFrameActivate?.(frame.id);
+                  }}
                   onDblClick={() => {
+                    // Double click: enter edit mode
                     // Calculate screen position for input overlay - same position as text
                     const screenX = frameX * viewport.zoom + viewport.pan.x;
                     const screenY = (frameY - 40) * viewport.zoom + viewport.pan.y - 1; // Adjust 1px up
                     setEditingFrameId(frame.id);
                     setEditingLabel(frame.customLabel || '');
                     setEditingPosition({ x: screenX, y: screenY });
+                  }}
+                  onMouseEnter={(e) => {
+                    const container = e.target.getStage()?.container();
+                    if (container) container.style.cursor = 'pointer';
+                  }}
+                  onMouseLeave={(e) => {
+                    const container = e.target.getStage()?.container();
+                    if (container) container.style.cursor = 'default';
                   }}
                   listening={true}
                 />
@@ -1098,7 +1113,7 @@ export function KonvaCanvas({
                       y={y}
                       width={width}
                       height={height}
-                      stroke="#2196F3"
+                      stroke="#1610ff"
                       strokeWidth={2}
                       dash={[5, 5]}
                       fill="rgba(33, 150, 243, 0.1)"
@@ -1202,10 +1217,10 @@ export function KonvaCanvas({
                   x={buttonX}
                   y={buttonY}
                   radius={buttonRadius}
-                  stroke="#2196F3"
+                  stroke="#1610ff"
                   strokeWidth={2}
                   dash={[5, 5]}
-                  fill={showPlusPopover || isPlusButtonHovered ? '#2196F3' : '#fff'}
+                  fill={showPlusPopover || isPlusButtonHovered ? '#1610ff' : '#fff'}
                   onClick={() => {
                     setShowPlusPopover(!showPlusPopover);
                   }}
@@ -1226,7 +1241,7 @@ export function KonvaCanvas({
                   text="+"
                   fontSize={32}
                   fontFamily="Arial"
-                  fill={isPlusButtonHovered || showPlusPopover ? '#fff' : '#2196F3'}
+                  fill={isPlusButtonHovered || showPlusPopover ? '#fff' : '#1610ff'}
                   align="center"
                   verticalAlign="middle"
                   offsetX={10}

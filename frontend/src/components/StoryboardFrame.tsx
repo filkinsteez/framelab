@@ -72,7 +72,7 @@ export function StoryboardFrame({
       style={{
         width: '250px',
         height: '200px',
-        border: isActive ? '3px solid #2196F3' : '2px solid #ddd',
+        border: isActive ? '3px solid #1610ff' : '2px solid #ddd',
         borderRadius: '8px',
         overflow: 'hidden',
         cursor: 'pointer',
@@ -176,7 +176,7 @@ export function StoryboardFrame({
             maxLength={30}
             style={{
               width: '100%',
-              border: '1px solid #2196F3',
+              border: '1px solid #1610ff',
               borderRadius: '4px',
               padding: '2px 4px',
               fontSize: '12px',

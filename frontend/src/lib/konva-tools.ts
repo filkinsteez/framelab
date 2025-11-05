@@ -31,7 +31,7 @@ export function createCircle(x: number, y: number): ShapeObject {
     type: 'circle',
     w: 100,
     h: 100,
-    fill: '#2196F3',
+    fill: '#1610ff',
     stroke: '#333',
     strokeWidth: 2,
     transform: {

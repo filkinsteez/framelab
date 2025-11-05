@@ -1122,7 +1122,7 @@ function AppKonva() {
                 style={{
                   width: '100%',
                   height: '100%',
-                  backgroundColor: '#2196F3',
+                  backgroundColor: '#1610ff',
                   animation: 'loading 1.5s infinite',
                 }}
               />

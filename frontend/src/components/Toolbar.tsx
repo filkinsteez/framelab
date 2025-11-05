@@ -199,7 +199,7 @@ function ToolbarButton({
       style={{
         padding: '8px 12px',
         backgroundColor: active ? '#e3f2fd' : 'transparent',
-        border: active ? '1px solid #2196F3' : '1px solid transparent',
+        border: active ? '1px solid #1610ff' : '1px solid transparent',
         borderRadius: '4px',
         cursor: 'pointer',
         display: 'flex',

@@ -106,7 +106,7 @@ function ImageRenderer({ object, isSelected, onSelect, onDragMove, onTransformEn
           y={0}
           width={object.w}
           height={object.h}
-          stroke="#2196F3"
+          stroke="#1610ff"
           strokeWidth={3}
           listening={false}
         />

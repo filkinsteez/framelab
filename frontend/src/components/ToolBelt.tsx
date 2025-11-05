@@ -165,7 +165,7 @@ function ToolButton({
         height: '36px',
         borderRadius: '50%',
         border: 'none',
-        backgroundColor: active ? '#2196F3' : 'transparent',
+        backgroundColor: active ? '#1610ff' : 'transparent',
         color: active ? 'white' : '#333',
         fontSize: '18px',
         cursor: 'pointer',

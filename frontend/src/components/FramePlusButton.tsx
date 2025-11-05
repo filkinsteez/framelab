@@ -59,9 +59,9 @@ export function FramePlusButton({
           width: isLarge ? '60px' : '40px',
           height: isLarge ? '60px' : '40px',
           borderRadius: '50%',
-          border: '2px dashed #2196F3',
-          background: showPopover ? '#2196F3' : '#fff',
-          color: showPopover ? '#fff' : '#2196F3',
+          border: '2px dashed #1610ff',
+          background: showPopover ? '#1610ff' : '#fff',
+          color: showPopover ? '#fff' : '#1610ff',
           fontSize: isLarge ? '32px' : '24px',
           fontWeight: 'bold',
           cursor: 'pointer',
@@ -73,13 +73,13 @@ export function FramePlusButton({
           paddingBottom: '5px', // Optical centering - move plus up slightly
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#2196F3';
+          e.currentTarget.style.background = '#1610ff';
           e.currentTarget.style.color = '#fff';
         }}
         onMouseLeave={(e) => {
           if (!showPopover) {
             e.currentTarget.style.background = '#fff';
-            e.currentTarget.style.color = '#2196F3';
+            e.currentTarget.style.color = '#1610ff';
           }
         }}
         title="Add frame"
