@@ -177,6 +177,7 @@ export function KonvaCanvas({
   // Plus button popover state
   const [showPlusPopover, setShowPlusPopover] = useState(false);
   const [isPlusButtonHovered, setIsPlusButtonHovered] = useState(false);
+  const plusButtonCircleRef = useRef<Konva.Circle | null>(null);
   const plusPopoverRef = useRef<HTMLDivElement>(null);
 
   // Listen for viewport sync events from external animations
@@ -257,14 +258,14 @@ export function KonvaCanvas({
     }
     
     // Check if target is transformer or its descendant
-    if (e.target.findAncestor('Transformer') || e.target.getType() === 'Transformer') {
-      return;
-    }
-
-    // Right-click - show context menu
+    // Right-click - show context menu (check BEFORE ignoring Transformer clicks)
     if (e.evt.button === 2 && selectedIds.length > 0) {
       e.evt.preventDefault();
       setContextMenu({ x: e.evt.clientX, y: e.evt.clientY });
+      return;
+    }
+
+    if (e.target.findAncestor('Transformer') || e.target.getType() === 'Transformer') {
       return;
     }
 
@@ -815,6 +816,91 @@ export function KonvaCanvas({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setSelectedIds]);
 
+  // Flip handlers
+  const handleFlipHorizontal = useCallback(() => {
+    if (selectedIds.length === 0) return;
+
+    if (selectedIds.length === 1) {
+      // Single object: toggle flipX flag
+      setObjects(prev => prev.map(obj => {
+        if (!selectedIds.includes(obj.id)) return obj;
+        
+        // Only apply to image objects
+        if (obj.type !== 'image') return obj;
+        
+        return {
+          ...obj,
+          flipX: !obj.flipX,
+        };
+      }));
+    } else {
+      // Multi-select: mirror positions around group center
+      const selectedObjects = objects.filter(obj => selectedIds.includes(obj.id));
+      if (selectedObjects.length === 0) return;
+
+      // Compute group center from object positions (not visual rects)
+      const positions = selectedObjects.map(obj => obj.transform.x);
+      const minX = Math.min(...positions);
+      const maxX = Math.max(...positions);
+      const cx = (minX + maxX) / 2;
+
+      // Reflect each object's position around group center
+      setObjects(prev => prev.map(obj => {
+        if (!selectedIds.includes(obj.id)) return obj;
+        
+        return {
+          ...obj,
+          transform: {
+            ...obj.transform,
+            x: 2 * cx - obj.transform.x,
+          },
+        };
+      }));
+    }
+  }, [selectedIds, objects, setObjects]);
+
+  const handleFlipVertical = useCallback(() => {
+    if (selectedIds.length === 0) return;
+
+    if (selectedIds.length === 1) {
+      // Single object: toggle flipY flag
+      setObjects(prev => prev.map(obj => {
+        if (!selectedIds.includes(obj.id)) return obj;
+        
+        // Only apply to image objects
+        if (obj.type !== 'image') return obj;
+        
+        return {
+          ...obj,
+          flipY: !obj.flipY,
+        };
+      }));
+    } else {
+      // Multi-select: mirror positions around group center
+      const selectedObjects = objects.filter(obj => selectedIds.includes(obj.id));
+      if (selectedObjects.length === 0) return;
+
+      // Compute group center from object positions (not visual rects)
+      const positions = selectedObjects.map(obj => obj.transform.y);
+      const minY = Math.min(...positions);
+      const maxY = Math.max(...positions);
+      const cy = (minY + maxY) / 2;
+
+      // Reflect each object's position around group center
+      setObjects(prev => prev.map(obj => {
+        if (!selectedIds.includes(obj.id)) return obj;
+        
+        return {
+          ...obj,
+          transform: {
+            ...obj.transform,
+            y: 2 * cy - obj.transform.y,
+          },
+        };
+      }));
+    }
+  }, [selectedIds, objects, setObjects]);
+
   // Context menu handlers
   const handleContextMenuAction = useCallback((action: string) => {
     switch (action) {
@@ -837,8 +923,14 @@ export function KonvaCanvas({
       case 'duplicate':
         setObjects(prev => duplicateObjects(prev, selectedIds));
         break;
+      case 'flipHorizontal':
+        handleFlipHorizontal();
+        break;
+      case 'flipVertical':
+        handleFlipVertical();
+        break;
     }
-  }, [selectedIds, setObjects, setSelectedIds]);
+  }, [selectedIds, setObjects, setSelectedIds, handleFlipHorizontal, handleFlipVertical]);
 
   // Objects are already in render order (array order = z-order)
   // No longer needed since we render per-frame
@@ -1106,13 +1198,14 @@ export function KonvaCanvas({
             return (
               <Group key={`plus-button-${storyboardFrames.length}`}>
                 <Circle
+                  ref={(node) => { plusButtonCircleRef.current = node; }}
                   x={buttonX}
                   y={buttonY}
                   radius={buttonRadius}
                   stroke="#2196F3"
                   strokeWidth={2}
                   dash={[5, 5]}
-                  fill="#fff"
+                  fill={showPlusPopover || isPlusButtonHovered ? '#2196F3' : '#fff'}
                   onClick={() => {
                     setShowPlusPopover(!showPlusPopover);
                   }}
@@ -1120,19 +1213,11 @@ export function KonvaCanvas({
                     const container = e.target.getStage()?.container();
                     if (container) container.style.cursor = 'pointer';
                     setIsPlusButtonHovered(true);
-                    const shape = e.target as Konva.Circle;
-                    shape.fill('#2196F3');
-                    shape.getLayer()?.batchDraw();
                   }}
                   onMouseLeave={(e) => {
                     const container = e.target.getStage()?.container();
                     if (container) container.style.cursor = 'default';
                     setIsPlusButtonHovered(false);
-                    if (!showPlusPopover) {
-                      const shape = e.target as Konva.Circle;
-                      shape.fill('#fff');
-                      shape.getLayer()?.batchDraw();
-                    }
                   }}
                 />
                 <Text
@@ -1179,7 +1264,10 @@ export function KonvaCanvas({
                 bottom: 0,
                 zIndex: 999,
               }}
-              onClick={() => setShowPlusPopover(false)}
+              onClick={() => {
+                setShowPlusPopover(false);
+                setIsPlusButtonHovered(false); // Reset hover state
+              }}
             />
             <div
               ref={plusPopoverRef}
@@ -1328,6 +1416,8 @@ export function KonvaCanvas({
           onSendBackward={() => handleContextMenuAction('sendBackward')}
           onDelete={() => handleContextMenuAction('delete')}
           onDuplicate={() => handleContextMenuAction('duplicate')}
+          onFlipHorizontal={() => handleContextMenuAction('flipHorizontal')}
+          onFlipVertical={() => handleContextMenuAction('flipVertical')}
         />
       )}
     </>

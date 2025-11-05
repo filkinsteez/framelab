@@ -957,18 +957,18 @@ function AppKonva() {
               transform: 'translateY(-50%)',
               width: '40px',
               height: '40px',
-              borderRadius: '50%',
               border: 'none',
-              backgroundColor: promptText.trim() && !isGenerating ? '#9C27B0' : '#e0e0e0',
-              color: 'white',
+              background: 'none',
+              color: promptText.trim() && !isGenerating ? '#333' : '#e0e0e0',
               cursor: promptText.trim() && !isGenerating ? 'pointer' : 'not-allowed',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               transition: 'all 0.2s',
+              fontSize: '24px',
             }}
           >
-            <span style={{ fontSize: '20px' }}>→</span>
+            →
           </button>
         </div>
       </div>

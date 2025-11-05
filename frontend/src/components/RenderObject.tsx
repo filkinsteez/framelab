@@ -88,10 +88,14 @@ function ImageRenderer({ object, isSelected, onSelect, onDragMove, onTransformEn
       />
       <Image
         image={image}
-        x={0}
-        y={0}
+        x={object.w / 2}
+        y={object.h / 2}
+        offsetX={object.w / 2}
+        offsetY={object.h / 2}
         width={object.w}
         height={object.h}
+        scaleX={object.flipX ? -1 : 1}
+        scaleY={object.flipY ? -1 : 1}
         listening={true}
       />
       {/* Hover border - hide when dragging */}

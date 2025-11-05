@@ -16,6 +16,8 @@ export interface Transform {
   rotation: number;
   opacity: number;
   zIndex: number;
+  scaleX?: number; // Optional: for independent horizontal scaling/flipping
+  scaleY?: number; // Optional: for independent vertical scaling/flipping
 }
 
 // ===== Canvas Objects =====
@@ -27,6 +29,8 @@ export interface ImageObject {
   w: number;
   h: number;
   transform: Transform;
+  flipX?: boolean;
+  flipY?: boolean;
   generationParams?: {
     prompt: string;
     seed?: number;
@@ -46,6 +50,8 @@ export interface ShapeObject {
   stroke: string;
   strokeWidth: number;
   transform: Transform;
+  flipX?: boolean;
+  flipY?: boolean;
 }
 
 export interface BrushStroke {

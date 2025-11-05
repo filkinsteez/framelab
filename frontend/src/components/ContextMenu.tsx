@@ -10,6 +10,8 @@ interface ContextMenuProps {
   onSendToBack: () => void;
   onDelete: () => void;
   onDuplicate?: () => void;
+  onFlipHorizontal?: () => void;
+  onFlipVertical?: () => void;
 }
 
 export function ContextMenu({
@@ -22,6 +24,8 @@ export function ContextMenu({
   onSendToBack,
   onDelete,
   onDuplicate,
+  onFlipHorizontal,
+  onFlipVertical,
 }: ContextMenuProps) {
   useEffect(() => {
     const handleClick = () => onClose();
@@ -90,6 +94,30 @@ export function ContextMenu({
           Duplicate
         </MenuItem>
       )}
+
+      {onFlipHorizontal && (
+        <MenuItem
+          onClick={() => {
+            onFlipHorizontal();
+            onClose();
+          }}
+        >
+          Flip Horizontal
+        </MenuItem>
+      )}
+
+      {onFlipVertical && (
+        <MenuItem
+          onClick={() => {
+            onFlipVertical();
+            onClose();
+          }}
+        >
+          Flip Vertical
+        </MenuItem>
+      )}
+
+      <div style={{ height: '1px', backgroundColor: '#e0e0e0', margin: '4px 0' }} />
 
       <MenuItem
         onClick={() => {
