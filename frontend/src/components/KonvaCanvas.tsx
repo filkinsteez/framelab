@@ -408,6 +408,11 @@ export function KonvaCanvas({
         setIsDraggingCanvas(true);
         setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
         setSelectedIds([]);
+        // Deactivate all frames (enter global mode)
+        if (onFrameActivate) {
+          console.log('Entering global mode - deactivating all frames');
+          onFrameActivate(''); // Empty string means global mode
+        }
       }
     }
   }, [currentTool, storyboardFrames, activeFrameId, frameY, frameW, frameH, selectedIds, setObjects, setSelectedIds, objects, getObjectIndex, isTransforming, onFrameActivate, getActiveFrameX]);
@@ -602,19 +607,48 @@ export function KonvaCanvas({
     const x = (e.clientX - stageBox.left - viewport.pan.x) / viewport.zoom;
     const y = (e.clientY - stageBox.top - viewport.pan.y) / viewport.zoom;
 
-    // Convert to frame-local coordinates (using active frame)
-    const activeFrameX = getActiveFrameX();
-    const frameLocalX = x - activeFrameX;
-    const frameLocalY = y - frameY;
+    // Determine which frame was dropped on
+    let targetFrameIndex = -1;
+    let targetFrameId: string | null = null;
+    let frameLocalX = 0;
+    let frameLocalY = 0;
+    
+    for (let i = 0; i < storyboardFrames.length; i++) {
+      const frameX = getFrameX(i);
+      const testLocalX = x - frameX;
+      const testLocalY = y - frameY;
+      
+      if (testLocalX >= 0 && testLocalX <= frameW && testLocalY >= 0 && testLocalY <= frameH) {
+        targetFrameIndex = i;
+        targetFrameId = storyboardFrames[i].id;
+        frameLocalX = testLocalX;
+        frameLocalY = testLocalY;
+        break;
+      }
+    }
 
-    // Process files
+    if (targetFrameIndex < 0) {
+      console.warn('Dropped outside any frame');
+      return;
+    }
+
+    console.log('Dropped on frame:', targetFrameId, 'at position:', { frameLocalX, frameLocalY });
+
+    // Activate the frame if it's not already active
+    if (targetFrameId && targetFrameId !== activeFrameId) {
+      onFrameActivate?.(targetFrameId);
+      // Wait for activation to complete before adding images
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    // Process files - they'll be added to the active frame via setObjects
     await handleFileDrop(files, frameLocalX, frameLocalY, setObjects, frameW, frameH);
 
     // Trigger ripple at drop position
     if (onTriggerRipple) {
       onTriggerRipple(e.clientX, e.clientY);
     }
-  }, [viewport, getActiveFrameX, frameY, frameW, frameH, onTriggerRipple, setObjects]);
+  }, [viewport, frameY, frameW, frameH, onTriggerRipple, setObjects, storyboardFrames, activeFrameId, onFrameActivate, getFrameX]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -787,7 +821,7 @@ export function KonvaCanvas({
         <Layer>
           {storyboardFrames.map((frame, index) => {
             const frameX = getFrameX(index);
-            const isActive = frame.id === activeFrameId;
+            const isActive = !!(activeFrameId && frame.id === activeFrameId);
             
             return (
               <Group key={frame.id}>
@@ -836,7 +870,7 @@ export function KonvaCanvas({
         <Layer ref={artLayerRef}>
           {storyboardFrames.map((frame, index) => {
             const frameX = getFrameX(index);
-            const isActive = frame.id === activeFrameId;
+            const isActive = !!(activeFrameId && frame.id === activeFrameId);
             
             return (
               <Group

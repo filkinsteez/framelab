@@ -59,12 +59,14 @@ function AppKonva() {
     }
   }, []);
 
-  // Initialize active frame if none selected
+  // Initialize active frame ONLY on first mount (not when entering global mode)
+  const [hasInitialized, setHasInitialized] = useState(false);
   useEffect(() => {
-    if (!storyboardState.activeFrameId && storyboardState.frames.length > 0) {
+    if (!hasInitialized && !storyboardState.activeFrameId && storyboardState.frames.length > 0) {
       setStoryboardState(prev => ({ ...prev, activeFrameId: prev.frames[0].id }));
+      setHasInitialized(true);
     }
-  }, [storyboardState.activeFrameId, storyboardState.frames.length]);
+  }, [hasInitialized]);
 
   // Auto-save to localStorage (debounced)
   useEffect(() => {
@@ -116,34 +118,65 @@ function AppKonva() {
   }, [storyboardState.activeFrameId]);
 
   const setActiveFrame = useCallback((frameId: string) => {
-    setStoryboardState(prev => setActiveFrameUtil(prev, frameId));
-    // Scroll into view
-    setTimeout(() => {
-      document.getElementById(`frame-card-${frameId}`)?.scrollIntoView({
-        behavior: 'smooth',
-        inline: 'center',
-        block: 'nearest',
-      });
-    }, 50);
+    // Empty string means global mode (no active frame)
+    const actualFrameId = frameId === '' ? null : frameId;
+    
+    setStoryboardState(prev => setActiveFrameUtil(prev, actualFrameId));
+    
+    // Scroll into view only if activating a specific frame
+    if (frameId && frameId !== '') {
+      setTimeout(() => {
+        document.getElementById(`frame-card-${frameId}`)?.scrollIntoView({
+          behavior: 'smooth',
+          inline: 'center',
+          block: 'nearest',
+        });
+      }, 50);
+    }
+    
+    if (frameId === '') {
+      console.log('Entered global mode');
+    } else {
+      console.log('Activated frame:', frameId);
+    }
   }, []);
+
+  // Sync guard to prevent infinite loops
+  const isSyncing = useRef(false);
 
   // Sync legacy objects state with active frame
   // This keeps existing code working while we transition
   const activeFrame = getActiveFrame();
   useEffect(() => {
-    if (activeFrame && JSON.stringify(activeFrame.objects) !== JSON.stringify(objects)) {
+    if (isSyncing.current) return;
+    
+    // Only sync if we have an active frame (not in global mode)
+    if (activeFrame && storyboardState.activeFrameId && JSON.stringify(activeFrame.objects) !== JSON.stringify(objects)) {
       console.log('Syncing active frame objects to legacy objects state');
+      isSyncing.current = true;
       setObjects(activeFrame.objects);
+      setTimeout(() => { isSyncing.current = false; }, 50);
+    } else if (!storyboardState.activeFrameId && objects.length > 0) {
+      // In global mode, clear objects
+      console.log('Clearing objects for global mode');
+      isSyncing.current = true;
+      setObjects([]);
+      setTimeout(() => { isSyncing.current = false; }, 50);
     }
-  }, [activeFrame?.id, storyboardState.frames]);
+  }, [activeFrame?.id, storyboardState.frames, storyboardState.activeFrameId]);
 
   // Sync changes back to active frame
   useEffect(() => {
-    if (activeFrame && JSON.stringify(activeFrame.objects) !== JSON.stringify(objects)) {
+    if (isSyncing.current) return;
+    
+    // Only sync if we have an active frame (not in global mode)
+    if (activeFrame && storyboardState.activeFrameId && JSON.stringify(activeFrame.objects) !== JSON.stringify(objects)) {
       console.log('Syncing legacy objects back to active frame');
+      isSyncing.current = true;
       updateActiveFrame(objects);
+      setTimeout(() => { isSyncing.current = false; }, 50);
     }
-  }, [objects]);
+  }, [objects, storyboardState.activeFrameId]);
 
   // Generate thumbnail for active frame when objects change (debounced)
   useEffect(() => {
@@ -627,10 +660,7 @@ function AppKonva() {
     console.log('handlePromptGenerate called with:', prompt);
     
     const activeFrame = getActiveFrame();
-    if (!activeFrame) {
-      alert('No active frame');
-      return;
-    }
+    const isGlobalMode = !activeFrame;
 
     setIsGenerating(true);
     setShowPromptDialog(false);
@@ -639,33 +669,107 @@ function AppKonva() {
       // Clear selection to hide transformer/handles
       setSelectedIds([]);
       await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // Export ONLY the active frame using offscreen renderer
-      console.log('Exporting active frame:', activeFrame.id, 'with', activeFrame.objects.length, 'objects');
-      
-      let canvasDataUri: string | undefined;
-      
-      if (activeFrame.objects.length > 0) {
-        // Use offscreen export for frames with content
-        const blob = await renderFrameBlob(activeFrame, 'image/png');
-        const reader = new FileReader();
-        canvasDataUri = await new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
+
+      if (isGlobalMode) {
+        // GLOBAL MODE: Generate for all frames sequentially (Frame 1, then 2, then 3...)
+        console.log('Global mode: Generating for all', storyboardState.frames.length, 'frames sequentially');
+        
+        for (let i = 0; i < storyboardState.frames.length; i++) {
+          const frame = storyboardState.frames[i];
+          console.log(`Generating frame ${i + 1}/${storyboardState.frames.length}:`, frame.id);
+          
+          let canvasDataUri: string | undefined;
+          
+          if (frame.objects.length > 0) {
+            const blob = await renderFrameBlob(frame, 'image/png');
+            const reader = new FileReader();
+            canvasDataUri = await new Promise<string>((resolve) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+          }
+
+          const result = await FalClient.generate({
+            prompt,
+            imageUrl: canvasDataUri || undefined,
+            strength: canvasDataUri ? 0.75 : undefined,
+            aspectRatio: '16:9',
+            numImages: 1,
+          });
+
+          if (result.success && result.data && result.data.images.length > 0) {
+            const imageUrl = result.data.images[0].url;
+            
+            // Wait for image to load before updating frame (prevents white flash)
+            await new Promise<void>((resolve) => {
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              img.onload = () => {
+                console.log(`Frame ${i + 1} image loaded`);
+                
+                // Update this frame now that image is loaded
+                setStoryboardState(prev => ({
+                  ...prev,
+                  frames: prev.frames.map(f => {
+                    if (f.id === frame.id) {
+                      const newImage: CanvasObject = {
+                        id: `img_${Date.now()}_${f.id}`,
+                        type: 'image',
+                        src: imageUrl,
+                        w: frameW,
+                        h: frameH,
+                        transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, zIndex: 0 },
+                      };
+                      return { ...f, objects: [newImage] };
+                    }
+                    return f;
+                  }),
+                }));
+                
+                resolve();
+              };
+              img.onerror = () => {
+                console.error(`Frame ${i + 1} image load failed`);
+                resolve(); // Continue anyway
+              };
+              img.src = imageUrl;
+            });
+            
+            console.log(`Frame ${i + 1} complete`);
+          } else {
+            console.warn(`Frame ${i + 1} generation failed`);
+          }
+        }
+        
+        console.log('Global generation complete: all frames processed');
+        setCurrentTool('select');
+      } else {
+        // SINGLE FRAME MODE: Generate for active frame only
+        console.log('Single frame mode: Exporting active frame:', activeFrame.id, 'with', activeFrame.objects.length, 'objects');
+        
+        let canvasDataUri: string | undefined;
+        
+        if (activeFrame.objects.length > 0) {
+          // Use offscreen export for frames with content
+          const blob = await renderFrameBlob(activeFrame, 'image/png');
+          const reader = new FileReader();
+          canvasDataUri = await new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+          console.log('Exported active frame, data URI length:', canvasDataUri.length);
+        }
+
+        const aspectRatio = '16:9';
+        console.log('Sending to FAL with aspect ratio:', aspectRatio);
+
+        const result = await FalClient.generate({
+          prompt,
+          imageUrl: canvasDataUri || undefined,
+          strength: canvasDataUri ? 0.75 : undefined,
+          aspectRatio,
+          numImages: 1,
         });
-        console.log('Exported active frame, data URI length:', canvasDataUri.length);
-      }
-
-      const aspectRatio = '16:9';
-      console.log('Sending to FAL with aspect ratio:', aspectRatio);
-
-      const result = await FalClient.generate({
-        prompt,
-        imageUrl: canvasDataUri || undefined,
-        strength: canvasDataUri ? 0.75 : undefined,
-        aspectRatio,
-        numImages: 1,
-      });
 
       if (result.success && result.data && result.data.images.length > 0) {
         console.log('Generation successful!', result.data);
@@ -747,6 +851,7 @@ function AppKonva() {
       } else {
         console.error('Generation failed or no data:', result);
       }
+      } // Close else block for single frame mode
     } catch (error) {
       console.error('Generation failed:', error);
       alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -817,16 +922,16 @@ function AppKonva() {
             value={promptText}
             onChange={(e) => setPromptText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && promptText.trim() && storyboardState.activeFrameId) {
+              if (e.key === 'Enter' && promptText.trim()) {
                 handleOpenPrompt();
               }
             }}
             placeholder={
               storyboardState.activeFrameId
                 ? `Generate for ${getActiveFrame()?.customLabel || `Frame ${getActiveFrame()?.frameNumber || ''}`}`
-                : 'Select a frame to generate'
+                : 'Generate for all frames (global mode)'
             }
-            disabled={isGenerating || !storyboardState.activeFrameId}
+            disabled={isGenerating}
             style={{
               width: '100%',
               padding: '14px 60px 14px 20px',
@@ -840,11 +945,11 @@ function AppKonva() {
           />
           <button
             onClick={() => {
-              if (promptText.trim() && storyboardState.activeFrameId) {
+              if (promptText.trim()) {
                 handleOpenPrompt();
               }
             }}
-            disabled={isGenerating || !promptText.trim() || !storyboardState.activeFrameId}
+            disabled={isGenerating || !promptText.trim()}
             style={{
               position: 'absolute',
               right: '8px',
@@ -854,9 +959,9 @@ function AppKonva() {
               height: '40px',
               borderRadius: '50%',
               border: 'none',
-              backgroundColor: promptText.trim() && !isGenerating && storyboardState.activeFrameId ? '#9C27B0' : '#e0e0e0',
+              backgroundColor: promptText.trim() && !isGenerating ? '#9C27B0' : '#e0e0e0',
               color: 'white',
-              cursor: promptText.trim() && !isGenerating && storyboardState.activeFrameId ? 'pointer' : 'not-allowed',
+              cursor: promptText.trim() && !isGenerating ? 'pointer' : 'not-allowed',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
