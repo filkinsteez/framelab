@@ -126,49 +126,64 @@ export function createGallery(x: number, y: number, images: any[]): GalleryObjec
 }
 
 // ===== Layer Order Functions =====
+// Array order determines z-index: first = bottom, last = top
 
 export function bringToFront(objects: CanvasObject[], ids: string[]): CanvasObject[] {
   if (ids.length === 0) return objects;
 
-  const maxZ = Math.max(...objects.map(o => o.transform.zIndex)) + 1;
+  // Separate selected and non-selected objects
+  const selected = objects.filter(obj => ids.includes(obj.id));
+  const nonSelected = objects.filter(obj => !ids.includes(obj.id));
 
-  return objects.map(obj =>
-    ids.includes(obj.id)
-      ? { ...obj, transform: { ...obj.transform, zIndex: maxZ } }
-      : obj
-  );
+  // Put selected objects at the end (on top)
+  return [...nonSelected, ...selected];
 }
 
 export function sendToBack(objects: CanvasObject[], ids: string[]): CanvasObject[] {
   if (ids.length === 0) return objects;
 
-  const minZ = Math.min(...objects.map(o => o.transform.zIndex)) - 1;
+  // Separate selected and non-selected objects
+  const selected = objects.filter(obj => ids.includes(obj.id));
+  const nonSelected = objects.filter(obj => !ids.includes(obj.id));
 
-  return objects.map(obj =>
-    ids.includes(obj.id)
-      ? { ...obj, transform: { ...obj.transform, zIndex: minZ } }
-      : obj
-  );
+  // Put selected objects at the beginning (on bottom)
+  return [...selected, ...nonSelected];
 }
 
 export function bringForward(objects: CanvasObject[], ids: string[]): CanvasObject[] {
   if (ids.length === 0) return objects;
 
-  return objects.map(obj =>
-    ids.includes(obj.id)
-      ? { ...obj, transform: { ...obj.transform, zIndex: obj.transform.zIndex + 1 } }
-      : obj
-  );
+  const result = [...objects];
+  
+  // Process from end to start to avoid shifting issues
+  for (let i = result.length - 2; i >= 0; i--) {
+    if (ids.includes(result[i].id)) {
+      // Swap with next item if it's not also selected
+      if (!ids.includes(result[i + 1].id)) {
+        [result[i], result[i + 1]] = [result[i + 1], result[i]];
+      }
+    }
+  }
+
+  return result;
 }
 
 export function sendBackward(objects: CanvasObject[], ids: string[]): CanvasObject[] {
   if (ids.length === 0) return objects;
 
-  return objects.map(obj =>
-    ids.includes(obj.id)
-      ? { ...obj, transform: { ...obj.transform, zIndex: obj.transform.zIndex - 1 } }
-      : obj
-  );
+  const result = [...objects];
+  
+  // Process from start to end to avoid shifting issues
+  for (let i = 1; i < result.length; i++) {
+    if (ids.includes(result[i].id)) {
+      // Swap with previous item if it's not also selected
+      if (!ids.includes(result[i - 1].id)) {
+        [result[i], result[i - 1]] = [result[i - 1], result[i]];
+      }
+    }
+  }
+
+  return result;
 }
 
 export function deleteObjects(objects: CanvasObject[], ids: string[]): CanvasObject[] {

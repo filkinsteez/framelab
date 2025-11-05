@@ -1,4 +1,12 @@
 import type { Tool } from '../lib/konva-types';
+import icMove from '../../../Assets/Icons/ic_move.png';
+import icBrush from '../../../Assets/Icons/ic_brush.png';
+import icArrow from '../../../Assets/Icons/ic_arrow.png';
+import icDelete from '../../../Assets/Icons/ic_delete.png';
+import icUndo from '../../../Assets/Icons/ic_undo.png';
+import icRedo from '../../../Assets/Icons/ic_redo.png';
+import ic3D from '../../../Assets/Icons/ic_3d.png';
+import icSave from '../../../Assets/Icons/ic_save.png';
 
 interface ToolBeltProps {
   currentTool: Tool;
@@ -8,7 +16,6 @@ interface ToolBeltProps {
   onDelete?: () => void;
   onSave?: () => void;
   onConvertTo3D?: () => void;
-  onOpen3DViewer?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
   hasSelection?: boolean;
@@ -24,7 +31,6 @@ export function ToolBelt({
   onDelete,
   onSave,
   onConvertTo3D,
-  onOpen3DViewer,
   canUndo = false,
   canRedo = false,
   hasSelection = false,
@@ -57,19 +63,19 @@ export function ToolBelt({
         }}
       >
         <ToolButton
-          icon="🖱️"
+          iconSrc={icMove}
           active={currentTool === 'select'}
           onClick={() => onChangeTool('select')}
           title="Select (V)"
         />
         <ToolButton
-          icon="✏️"
+          iconSrc={icBrush}
           active={currentTool === 'brush'}
           onClick={() => onChangeTool('brush')}
           title="Brush (B)"
         />
         <ToolButton
-          icon="➡️"
+          iconSrc={icArrow}
           active={currentTool === 'arrow'}
           onClick={() => onChangeTool('arrow')}
           title="Arrow (A)"
@@ -89,13 +95,13 @@ export function ToolBelt({
         }}
       >
         <ActionButton
-          icon="↶"
+          iconSrc={icUndo}
           onClick={onUndo}
           title="Undo (Cmd+Z)"
           disabled={!canUndo}
         />
         <ActionButton
-          icon="↷"
+          iconSrc={icRedo}
           onClick={onRedo}
           title="Redo (Cmd+Shift+Z)"
           disabled={!canRedo}
@@ -115,26 +121,20 @@ export function ToolBelt({
         }}
       >
         <ActionButton
-          icon="🗑️"
+          iconSrc={icDelete}
           onClick={onDelete}
           title="Delete"
           disabled={!hasSelection}
           danger
         />
         <ActionButton
-          icon="🌀"
-          onClick={onOpen3DViewer}
-          title="Edit 3D Model"
-          disabled={!has3DModelSelected}
-        />
-        <ActionButton
-          icon="🎲"
+          iconSrc={ic3D}
           onClick={onConvertTo3D}
           title="Convert Image to 3D"
           disabled={!hasImageSelected}
         />
         <ActionButton
-          icon="💾"
+          iconSrc={icSave}
           onClick={onSave}
           title="Save as JPEG"
         />
@@ -145,11 +145,13 @@ export function ToolBelt({
 
 function ToolButton({
   icon,
+  iconSrc,
   active,
   onClick,
   title,
 }: {
-  icon: string;
+  icon?: string;
+  iconSrc?: string;
   active: boolean;
   onClick: () => void;
   title: string;
@@ -172,6 +174,7 @@ function ToolButton({
         justifyContent: 'center',
         transition: 'all 0.15s ease',
         boxShadow: active ? '0 2px 8px rgba(33, 150, 243, 0.3)' : 'none',
+        padding: '6px',
       }}
       onMouseEnter={(e) => {
         if (!active) {
@@ -184,19 +187,33 @@ function ToolButton({
         }
       }}
     >
-      {icon}
+      {iconSrc ? (
+        <img 
+          src={iconSrc} 
+          alt={title}
+          style={{ 
+            width: '20px', 
+            height: '20px',
+            filter: active ? 'brightness(0) invert(1)' : 'none'
+          }} 
+        />
+      ) : (
+        icon
+      )}
     </button>
   );
 }
 
 function ActionButton({
   icon,
+  iconSrc,
   onClick,
   title,
   disabled,
   danger,
 }: {
-  icon: string;
+  icon?: string;
+  iconSrc?: string;
   onClick?: () => void;
   title: string;
   disabled?: boolean;
@@ -221,6 +238,7 @@ function ActionButton({
         justifyContent: 'center',
         transition: 'all 0.15s ease',
         opacity: disabled ? 0.5 : 1,
+        padding: '6px',
       }}
       onMouseEnter={(e) => {
         if (!disabled) {
@@ -233,7 +251,20 @@ function ActionButton({
         }
       }}
     >
-      {icon}
+      {iconSrc ? (
+        <img 
+          src={iconSrc} 
+          alt={title}
+          style={{ 
+            width: '20px', 
+            height: '20px',
+            opacity: disabled ? 0.3 : 1,
+            filter: danger && !disabled ? 'brightness(0) saturate(100%) invert(20%) sepia(85%) saturate(3176%) hue-rotate(347deg) brightness(91%) contrast(89%)' : 'none'
+          }} 
+        />
+      ) : (
+        icon
+      )}
     </button>
   );
 }

@@ -125,7 +125,6 @@ export type Tool =
   | 'select'
   | 'brush'
   | 'arrow'
-  | 'triangle'
   | 'text'
   | 'prompt';
 

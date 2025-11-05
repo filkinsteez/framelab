@@ -9,26 +9,27 @@ interface RenderObjectProps {
   isSelected: boolean;
   onSelect: (id: string, e: Konva.KonvaEventObject<MouseEvent>) => void;
   onDragMove: (id: string, e: Konva.KonvaEventObject<DragEvent>) => void;
-  onTransformEnd: (id: string) => void;
+  onTransformEnd: (id: string, e?: Konva.KonvaEventObject<Event>) => void;
   currentTool: Tool;
+  isMarqueeSelecting: boolean;
 }
 
-export function RenderObject({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+export function RenderObject({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   switch (object.type) {
     case 'image':
-      return <ImageRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <ImageRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} isMarqueeSelecting={isMarqueeSelecting} />;
     case 'rect':
-      return <RectRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <RectRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} isMarqueeSelecting={isMarqueeSelecting} />;
     case 'circle':
-      return <CircleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <CircleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} isMarqueeSelecting={isMarqueeSelecting} />;
     case 'triangle':
-      return <TriangleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <TriangleRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} isMarqueeSelecting={isMarqueeSelecting} />;
     case 'brush':
-      return <BrushRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <BrushRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} isMarqueeSelecting={isMarqueeSelecting} />;
     case 'arrow':
-      return <ArrowRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <ArrowRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} isMarqueeSelecting={isMarqueeSelecting} />;
     case 'text':
-      return <TextRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} />;
+      return <TextRenderer object={object} isSelected={isSelected} onSelect={onSelect} onDragMove={onDragMove} onTransformEnd={onTransformEnd} currentTool={currentTool} isMarqueeSelecting={isMarqueeSelecting} />;
     case 'model3d':
       // Not used - 3D viewer is now an overlay, not embedded in canvas
       return null;
@@ -43,62 +44,64 @@ export function RenderObject({ object, isSelected, onSelect, onDragMove, onTrans
 
 // ===== Image Renderer =====
 
-function ImageRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
-  const [image] = useImage(object.type === 'image' ? object.src : '');
+function ImageRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
+  const [image] = useImage(object.type === 'image' ? object.src : '', 'anonymous');
   const [isHovering, setIsHovering] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
 
   if (object.type !== 'image') return null;
 
-  // Debug log when image loads
-  if (image && object.generationParams) {
-    console.log('Rendering generated image:', {
-      natural: { w: image.width, h: image.height },
-      stored: { w: object.w, h: object.h },
-      scale: object.transform.scale,
-      finalRendered: { 
-        w: object.w * object.transform.scale, 
-        h: object.h * object.transform.scale 
-      },
-    });
-  }
-
   return (
-    <Group>
-      <Image
-        id={object.id}
-        image={image}
-        x={object.transform.x}
-        y={object.transform.y}
+    <Group
+      id={object.id}
+      x={object.transform.x}
+      y={object.transform.y}
+      scaleX={object.transform.scale}
+      scaleY={object.transform.scale}
+      rotation={object.transform.rotation}
+      opacity={object.transform.opacity}
+      draggable={currentTool === 'select' && !isMarqueeSelecting}
+      onDragStart={(e) => {
+        // Select on drag start if not already selected (enables click-and-drag)
+        if (!isSelected) {
+          onSelect(object.id, e as any);
+        }
+        setIsDragging(true);
+      }}
+      onDragMove={(e) => onDragMove(object.id, e)}
+      onDragEnd={(e) => {
+        setIsDragging(false);
+        onTransformEnd(object.id, e);
+      }}
+      onTransformEnd={(e) => onTransformEnd(object.id, e)}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+    >
+      {/* Invisible bounding rect for Transformer */}
+      <Rect
+        x={0}
+        y={0}
         width={object.w}
         height={object.h}
-        scaleX={object.transform.scale}
-        scaleY={object.transform.scale}
-        rotation={object.transform.rotation}
-        opacity={object.transform.opacity}
-        draggable={currentTool === 'select'}
-        onClick={(e) => onSelect(object.id, e)}
-        onTap={(e) => onSelect(object.id, e as any)}
-        onDragStart={() => setIsDragging(true)}
-        onDragMove={(e) => onDragMove(object.id, e)}
-        onDragEnd={() => {
-          setIsDragging(false);
-          onTransformEnd(object.id);
-        }}
-        onTransformEnd={() => onTransformEnd(object.id)}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
+        fill="transparent"
+        listening={false}
+      />
+      <Image
+        image={image}
+        x={0}
+        y={0}
+        width={object.w}
+        height={object.h}
+        listening={true}
       />
       {/* Hover border - hide when dragging */}
       {isHovering && !isDragging && (
         <Rect
-          x={object.transform.x}
-          y={object.transform.y}
+          name="hover-border"
+          x={0}
+          y={0}
           width={object.w}
           height={object.h}
-          scaleX={object.transform.scale}
-          scaleY={object.transform.scale}
-          rotation={object.transform.rotation}
           stroke="#2196F3"
           strokeWidth={3}
           listening={false}
@@ -110,7 +113,7 @@ function ImageRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
 
 // ===== Rect Renderer =====
 
-function RectRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+function RectRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'rect') return null;
 
   return (
@@ -127,18 +130,23 @@ function RectRenderer({ object, onSelect, onDragMove, onTransformEnd, currentToo
       scaleY={object.transform.scale}
       rotation={object.transform.rotation}
       opacity={object.transform.opacity}
-      draggable={currentTool === 'select'}
+      draggable={currentTool === 'select' && !isMarqueeSelecting}
       onClick={(e) => onSelect(object.id, e)}
       onTap={(e) => onSelect(object.id, e as any)}
-      onDragEnd={() => onTransformEnd(object.id)}
-      onTransformEnd={() => onTransformEnd(object.id)}
+      onDragStart={(e) => {
+        if (!isSelected) {
+          onSelect(object.id, e as any);
+        }
+      }}
+      onDragEnd={(e) => onTransformEnd(object.id, e)}
+      onTransformEnd={(e) => onTransformEnd(object.id, e)}
     />
   );
 }
 
 // ===== Circle Renderer =====
 
-function CircleRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+function CircleRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'circle') return null;
 
   return (
@@ -154,18 +162,23 @@ function CircleRenderer({ object, onSelect, onDragMove, onTransformEnd, currentT
       scaleY={object.transform.scale}
       rotation={object.transform.rotation}
       opacity={object.transform.opacity}
-      draggable={currentTool === 'select'}
+      draggable={currentTool === 'select' && !isMarqueeSelecting}
       onClick={(e) => onSelect(object.id, e)}
       onTap={(e) => onSelect(object.id, e as any)}
-      onDragEnd={() => onTransformEnd(object.id)}
-      onTransformEnd={() => onTransformEnd(object.id)}
+      onDragStart={(e) => {
+        if (!isSelected) {
+          onSelect(object.id, e as any);
+        }
+      }}
+      onDragEnd={(e) => onTransformEnd(object.id, e)}
+      onTransformEnd={(e) => onTransformEnd(object.id, e)}
     />
   );
 }
 
 // ===== Triangle Renderer =====
 
-function TriangleRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+function TriangleRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'triangle') return null;
 
   const points = [
@@ -188,18 +201,23 @@ function TriangleRenderer({ object, onSelect, onDragMove, onTransformEnd, curren
       rotation={object.transform.rotation}
       opacity={object.transform.opacity}
       closed
-      draggable={currentTool === 'select'}
+      draggable={currentTool === 'select' && !isMarqueeSelecting}
       onClick={(e) => onSelect(object.id, e)}
       onTap={(e) => onSelect(object.id, e as any)}
-      onDragEnd={() => onTransformEnd(object.id)}
-      onTransformEnd={() => onTransformEnd(object.id)}
+      onDragStart={(e) => {
+        if (!isSelected) {
+          onSelect(object.id, e as any);
+        }
+      }}
+      onDragEnd={(e) => onTransformEnd(object.id, e)}
+      onTransformEnd={(e) => onTransformEnd(object.id, e)}
     />
   );
 }
 
 // ===== Brush Renderer =====
 
-function BrushRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+function BrushRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'brush') return null;
 
   // Calculate bounding box from points
@@ -220,12 +238,17 @@ function BrushRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
       scaleX={object.transform.scale}
       scaleY={object.transform.scale}
       rotation={object.transform.rotation}
-      draggable={currentTool === 'select'}
+      draggable={currentTool === 'select' && !isMarqueeSelecting}
       onClick={(e) => onSelect(object.id, e)}
       onTap={(e) => onSelect(object.id, e as any)}
+      onDragStart={(e) => {
+        if (!isSelected) {
+          onSelect(object.id, e as any);
+        }
+      }}
       onDragMove={(e) => onDragMove(object.id, e)}
-      onDragEnd={() => onTransformEnd(object.id)}
-      onTransformEnd={() => onTransformEnd(object.id)}
+      onDragEnd={(e) => onTransformEnd(object.id, e)}
+      onTransformEnd={(e) => onTransformEnd(object.id, e)}
     >
       {/* Invisible bounding box for easier selection/dragging */}
       <Rect
@@ -234,6 +257,7 @@ function BrushRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
         width={width}
         height={height}
         fill="transparent"
+        listening={false}
       />
       {/* The actual brush stroke */}
       <Line
@@ -253,7 +277,7 @@ function BrushRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
 
 // ===== Arrow Renderer =====
 
-function ArrowRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+function ArrowRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'arrow') return null;
 
   const [x1, y1, x2, y2] = object.points;
@@ -274,12 +298,17 @@ function ArrowRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
       scaleX={object.transform.scale}
       scaleY={object.transform.scale}
       rotation={object.transform.rotation}
-      draggable={currentTool === 'select'}
+      draggable={currentTool === 'select' && !isMarqueeSelecting}
       onClick={(e) => onSelect(object.id, e)}
       onTap={(e) => onSelect(object.id, e as any)}
+      onDragStart={(e) => {
+        if (!isSelected) {
+          onSelect(object.id, e as any);
+        }
+      }}
       onDragMove={(e) => onDragMove(object.id, e)}
-      onDragEnd={() => onTransformEnd(object.id)}
-      onTransformEnd={() => onTransformEnd(object.id)}
+      onDragEnd={(e) => onTransformEnd(object.id, e)}
+      onTransformEnd={(e) => onTransformEnd(object.id, e)}
     >
       {/* Invisible bounding box for easier selection/dragging */}
       <Rect
@@ -288,6 +317,7 @@ function ArrowRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
         width={width}
         height={height}
         fill="transparent"
+        listening={false}
       />
       {/* The actual arrow line */}
       <Line
@@ -325,7 +355,7 @@ function ArrowRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTo
 
 // ===== Text Renderer =====
 
-function TextRenderer({ object, onSelect, onDragMove, onTransformEnd, currentTool }: RenderObjectProps) {
+function TextRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'text') return null;
 
   return (
@@ -342,11 +372,16 @@ function TextRenderer({ object, onSelect, onDragMove, onTransformEnd, currentToo
       scaleY={object.transform.scale}
       rotation={object.transform.rotation}
       opacity={object.transform.opacity}
-      draggable={currentTool === 'select'}
+      draggable={currentTool === 'select' && !isMarqueeSelecting}
       onClick={(e) => onSelect(object.id, e)}
       onTap={(e) => onSelect(object.id, e as any)}
-      onDragEnd={() => onTransformEnd(object.id)}
-      onTransformEnd={() => onTransformEnd(object.id)}
+      onDragStart={(e) => {
+        if (!isSelected) {
+          onSelect(object.id, e as any);
+        }
+      }}
+      onDragEnd={(e) => onTransformEnd(object.id, e)}
+      onTransformEnd={(e) => onTransformEnd(object.id, e)}
     />
   );
 }

@@ -29,6 +29,16 @@ export async function exportFrame(
   console.log('Frame dimensions:', { w, h });
 
   try {
+    // Save current viewport state
+    const originalScale = { x: stage.scaleX(), y: stage.scaleY() };
+    const originalPosition = { x: stage.x(), y: stage.y() };
+    
+    console.log('Original viewport:', { scale: originalScale, position: originalPosition });
+    
+    // Temporarily reset viewport to export in world coordinates
+    stage.scale({ x: 1, y: 1 });
+    stage.position({ x: 0, y: 0 });
+    
     // Use Konva's built-in export with pixel-perfect frame bounds
     console.log('Calling stage.toDataURL with:', {
       x: frameX,
@@ -48,6 +58,11 @@ export async function exportFrame(
       mimeType: format === 'jpeg' ? 'image/jpeg' : 'image/png',
       quality: format === 'jpeg' ? 0.95 : 1,
     });
+
+    // Restore original viewport state
+    stage.scale(originalScale);
+    stage.position(originalPosition);
+    stage.batchDraw();
 
     console.log('DataURL length:', dataURL.length);
 
@@ -118,6 +133,16 @@ export async function exportFrameAsDataUri(
   const { w, h } = FRAME_SPECS[frameMode];
 
   try {
+    // Save current viewport state
+    const originalScale = { x: stage.scaleX(), y: stage.scaleY() };
+    const originalPosition = { x: stage.x(), y: stage.y() };
+    
+    console.log('Original viewport:', { scale: originalScale, position: originalPosition });
+    
+    // Temporarily reset viewport to export in world coordinates
+    stage.scale({ x: 1, y: 1 });
+    stage.position({ x: 0, y: 0 });
+    
     console.log('Calling stage.toDataURL with bounds:', { x: frameX, y: frameY, width: w, height: h });
     const dataURL = stage.toDataURL({
       x: frameX,
@@ -127,6 +152,11 @@ export async function exportFrameAsDataUri(
       pixelRatio: 1,
       mimeType: 'image/png',
     });
+
+    // Restore original viewport state
+    stage.scale(originalScale);
+    stage.position(originalPosition);
+    stage.batchDraw();
 
     console.log('Data URL created, length:', dataURL.length);
     console.log('Data URL starts with:', dataURL.substring(0, 50));

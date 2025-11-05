@@ -3,7 +3,7 @@
  */
 
 const SNAP_THRESHOLD = 10; // pixels - distance to actually snap
-const GUIDE_THRESHOLD = 50; // pixels - distance to show guide lines
+const GUIDE_THRESHOLD = 35; // pixels - distance to show guide lines (reduced from 50)
 
 export interface SnapResult {
   x: number;
