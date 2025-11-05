@@ -300,10 +300,64 @@ export function KonvaCanvas({
     const insideFrame = clickedFrameIndex >= 0;
 
     // Activate clicked frame if it's not already active
-    if (insideFrame && clickedFrameId && clickedFrameId !== activeFrameId && clickedOnFrame) {
+    if (insideFrame && clickedFrameId && clickedFrameId !== activeFrameId) {
       console.log('Activating frame:', clickedFrameId);
       onFrameActivate?.(clickedFrameId);
-      return;
+      
+      // If clicking on an object (not just the frame background), select it after activation
+      if (!clickedOnFrame && currentTool === 'select') {
+        console.log('Clicked on object in inactive frame, clickedOnFrame:', clickedOnFrame, 'target:', e.target.name());
+        // Perform hit-testing on the clicked frame's objects
+        const screenPointerPos = stage.getPointerPosition();
+        if (screenPointerPos) {
+          const hits = stage.getAllIntersections(screenPointerPos);
+          console.log('Hits found:', hits.length);
+          
+          // Find the clicked frame's objects
+          const clickedFrame = storyboardFrames.find(f => f.id === clickedFrameId);
+          console.log('Clicked frame has', clickedFrame?.objects.length, 'objects');
+          if (clickedFrame) {
+            // Helper: Get the actual object ID (from node or parent Group)
+            const getObjectId = (node: Konva.Node): string | null => {
+              const nodeId = node.id();
+              if (nodeId && clickedFrame.objects.some(obj => obj.id === nodeId)) {
+                return nodeId;
+              }
+              const parent = node.getParent();
+              if (parent && parent.getType() === 'Group') {
+                const parentId = parent.id();
+                if (parentId && clickedFrame.objects.some(obj => obj.id === parentId)) {
+                  return parentId;
+                }
+              }
+              return null;
+            };
+            
+            // Find selectable objects in the clicked frame
+            const hitIds = new Set<string>();
+            for (const node of hits) {
+              if (node.findAncestor('Transformer')) continue;
+              const name = node.name();
+              if (name?.startsWith('frame-background') || name === 'snap-guide' || name === 'hover-border') continue;
+              
+              const objId = getObjectId(node);
+              if (objId) {
+                hitIds.add(objId);
+              }
+            }
+            
+            if (hitIds.size > 0) {
+              // Select the first object found
+              const topmostId = Array.from(hitIds)[0];
+              console.log('Selecting object on newly activated frame:', topmostId);
+              setSelectedIds([topmostId]);
+              return;
+            }
+          }
+        }
+      }
+      
+      return; // Frame background click - just activate, don't select
     }
 
     // SELECT MODE: Use hit-testing to find topmost selectable object
@@ -336,7 +390,7 @@ export function KonvaCanvas({
           if (node.findAncestor('Transformer')) continue;
           // Ignore helper elements
           const name = node.name();
-          if (name === 'frame-background' || name === 'snap-guide' || name === 'hover-border') continue;
+          if (name?.startsWith('frame-background') || name === 'snap-guide' || name === 'hover-border') continue;
           
           // Get object ID
           const objId = getObjectId(node);
