@@ -5,7 +5,6 @@ import icArrow from '../../../Assets/Icons/ic_arrow.png';
 import icDelete from '../../../Assets/Icons/ic_delete.png';
 import icUndo from '../../../Assets/Icons/ic_undo.png';
 import icRedo from '../../../Assets/Icons/ic_redo.png';
-import ic3D from '../../../Assets/Icons/ic_3d.png';
 import icSave from '../../../Assets/Icons/ic_save.png';
 
 interface ToolBeltProps {
@@ -15,12 +14,9 @@ interface ToolBeltProps {
   onRedo?: () => void;
   onDelete?: () => void;
   onSave?: () => void;
-  onConvertTo3D?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
   hasSelection?: boolean;
-  hasImageSelected?: boolean;
-  has3DModelSelected?: boolean;
 }
 
 export function ToolBelt({
@@ -30,12 +26,9 @@ export function ToolBelt({
   onRedo,
   onDelete,
   onSave,
-  onConvertTo3D,
   canUndo = false,
   canRedo = false,
   hasSelection = false,
-  hasImageSelected = false,
-  has3DModelSelected = false,
 }: ToolBeltProps) {
   return (
     <div
@@ -126,12 +119,6 @@ export function ToolBelt({
           title="Delete"
           disabled={!hasSelection}
           danger
-        />
-        <ActionButton
-          iconSrc={ic3D}
-          onClick={onConvertTo3D}
-          title="Convert Image to 3D"
-          disabled={!hasImageSelected}
         />
         <ActionButton
           iconSrc={icSave}

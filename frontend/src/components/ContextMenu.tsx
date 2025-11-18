@@ -12,6 +12,7 @@ interface ContextMenuProps {
   onDuplicate?: () => void;
   onFlipHorizontal?: () => void;
   onFlipVertical?: () => void;
+  onConvertTo3D?: () => void;
 }
 
 export function ContextMenu({
@@ -26,6 +27,7 @@ export function ContextMenu({
   onDuplicate,
   onFlipHorizontal,
   onFlipVertical,
+  onConvertTo3D,
 }: ContextMenuProps) {
   useEffect(() => {
     const handleClick = () => onClose();
@@ -114,6 +116,17 @@ export function ContextMenu({
           }}
         >
           Flip Vertical
+        </MenuItem>
+      )}
+
+      {onConvertTo3D && (
+        <MenuItem
+          onClick={() => {
+            onConvertTo3D();
+            onClose();
+          }}
+        >
+          Convert to 3D
         </MenuItem>
       )}
 
