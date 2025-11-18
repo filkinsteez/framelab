@@ -222,19 +222,32 @@ function AppKonva() {
     if (!stageRef.current) return { frameX: 0, frameY: 0 };
     
     const stage = stageRef.current;
-    const frameNode = stage.findOne('.frame-background');
+    
+    // Find the active frame's background node by name
+    if (storyboardState.activeFrameId) {
+      const frameName = `frame-background-${storyboardState.activeFrameId}`;
+      const frameNode = stage.findOne((node) => node.name() === frameName);
+      if (frameNode) {
+        console.log('Found active frame node:', frameName, 'at position:', { x: frameNode.x(), y: frameNode.y() });
+        return { frameX: frameNode.x(), frameY: frameNode.y() };
+      }
+    }
+    
+    // Fallback: find any frame-background node (for legacy support)
+    const frameNode = stage.findOne((node) => node.name()?.startsWith('frame-background'));
     if (frameNode) {
+      console.log('Found frame node (fallback):', frameNode.name(), 'at position:', { x: frameNode.x(), y: frameNode.y() });
       return { frameX: frameNode.x(), frameY: frameNode.y() };
     }
     
-    // Fallback: calculate centered position based on stage size
+    // Final fallback: calculate centered position based on stage size
     const stageWidth = stage.width();
     const stageHeight = stage.height();
     return {
       frameX: (stageWidth - frameW) / 2,
       frameY: (stageHeight - frameH) / 2,
     };
-  }, [frameW, frameH]);
+  }, [frameW, frameH, storyboardState.activeFrameId]);
 
   const captureSnapshot = useCallback(() => {
     if (!activeModelId || !threejsCanvasRef.current) return null;
