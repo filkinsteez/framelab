@@ -1,3 +1,6 @@
+// Import bootstrap FIRST to set environment variables
+import './bootstrap.js';
+
 import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';

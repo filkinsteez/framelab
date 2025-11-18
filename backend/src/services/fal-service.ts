@@ -1,3 +1,6 @@
+// Import bootstrap FIRST to set environment variables
+import '../bootstrap.js';
+
 import * as fal from '@fal-ai/serverless-client';
 import { config } from '../config.js';
 

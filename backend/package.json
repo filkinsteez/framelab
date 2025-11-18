@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --exec tsx src/server.ts",
+    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 nodemon --exec tsx src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   },
