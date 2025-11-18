@@ -117,7 +117,7 @@ function ImageRenderer({ object, isSelected, onSelect, onDragMove, onTransformEn
 
 // ===== Rect Renderer =====
 
-function RectRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
+function RectRenderer({ object, isSelected, onSelect, onDragMove: _onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'rect') return null;
 
   return (
@@ -150,7 +150,7 @@ function RectRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd
 
 // ===== Circle Renderer =====
 
-function CircleRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
+function CircleRenderer({ object, isSelected, onSelect, onDragMove: _onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'circle') return null;
 
   return (
@@ -182,7 +182,7 @@ function CircleRenderer({ object, isSelected, onSelect, onDragMove, onTransformE
 
 // ===== Triangle Renderer =====
 
-function TriangleRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
+function TriangleRenderer({ object, isSelected, onSelect, onDragMove: _onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'triangle') return null;
 
   const points = [
@@ -359,7 +359,7 @@ function ArrowRenderer({ object, isSelected, onSelect, onDragMove, onTransformEn
 
 // ===== Text Renderer =====
 
-function TextRenderer({ object, isSelected, onSelect, onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
+function TextRenderer({ object, isSelected, onSelect, onDragMove: _onDragMove, onTransformEnd, currentTool, isMarqueeSelecting }: RenderObjectProps) {
   if (object.type !== 'text') return null;
 
   return (

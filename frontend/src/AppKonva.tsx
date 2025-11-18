@@ -6,8 +6,7 @@ import { ToolBelt } from './components/ToolBelt';
 import { SettingsPanel } from './components/SettingsPanel';
 import { PromptBoxModal } from './components/PromptBoxKonva';
 import { GLBViewer } from './components/GLBViewer';
-import { StoryboardStrip } from './components/StoryboardStrip';
-import { exportAndDownload, exportFrameAsDataUri } from './lib/konva-export';
+import { exportAndDownload } from './lib/konva-export';
 import { renderFrameBlob } from './lib/offscreen-export';
 import { FalClient } from './lib/fal-client';
 import { useHistory } from './hooks/useHistory';
@@ -226,7 +225,7 @@ function AppKonva() {
     // Find the active frame's background node by name
     if (storyboardState.activeFrameId) {
       const frameName = `frame-background-${storyboardState.activeFrameId}`;
-      const frameNode = stage.findOne((node) => node.name() === frameName);
+      const frameNode = stage.findOne((node: Konva.Node) => node.name() === frameName);
       if (frameNode) {
         console.log('Found active frame node:', frameName, 'at position:', { x: frameNode.x(), y: frameNode.y() });
         return { frameX: frameNode.x(), frameY: frameNode.y() };
@@ -234,7 +233,7 @@ function AppKonva() {
     }
     
     // Fallback: find any frame-background node (for legacy support)
-    const frameNode = stage.findOne((node) => node.name()?.startsWith('frame-background'));
+    const frameNode = stage.findOne((node: Konva.Node) => node.name()?.startsWith('frame-background'));
     if (frameNode) {
       console.log('Found frame node (fallback):', frameNode.name(), 'at position:', { x: frameNode.x(), y: frameNode.y() });
       return { frameX: frameNode.x(), frameY: frameNode.y() };
@@ -329,10 +328,10 @@ function AppKonva() {
     return objects.find(obj => obj.id === selectedIds[0]) || null;
   }, [selectedIds, objects]);
 
-  const hasImageSelected = selectedObject?.type === 'image';
-  const has3DModelSelected = selectedObject?.type === 'image' && !!selectedObject.model3D;
+  // Removed unused variables: hasImageSelected, has3DModelSelected, open3DViewerForSelected
+  // 3D viewer functionality is now in context menu
 
-  const open3DViewerForSelected = useCallback(() => {
+  const _open3DViewerForSelected = useCallback(() => {
     if (!selectedObject || selectedObject.type !== 'image' || !selectedObject.model3D) return;
     
     // Hide the underlying image
@@ -914,7 +913,7 @@ function AppKonva() {
           },
           generationParams: {
             prompt,
-            seed: result.data.seed,
+            seed: result.data?.seed || Date.now(),
             timestamp: Date.now(),
           },
         };
@@ -992,7 +991,6 @@ function AppKonva() {
           storyboardFrames={storyboardState.frames}
           activeFrameId={storyboardState.activeFrameId}
           onFrameActivate={setActiveFrame}
-          onUpdateFrameObjects={updateActiveFrame}
           onAddFrame={() => {
             console.log('Plus button - New Frame clicked, current frames:', storyboardState.frames.length);
             handleAddFrame(storyboardState.frames.length);

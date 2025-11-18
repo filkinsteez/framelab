@@ -6,8 +6,8 @@ interface TopBarProps {
 }
 
 export function TopBar({
-  frameMode,
-  onChangeFrame,
+  frameMode: _frameMode,
+  onChangeFrame: _onChangeFrame,
 }: TopBarProps) {
   return (
     <div

@@ -37,7 +37,6 @@ interface KonvaCanvasProps {
   storyboardFrames?: StoryboardFrame[];
   activeFrameId?: string | null;
   onFrameActivate?: (frameId: string) => void;
-  onUpdateFrameObjects?: (frameId: string, objects: CanvasObject[]) => void;
   onAddFrame?: () => void;
   onNextFrame?: () => void;
   onDuplicateFrame?: () => void;
@@ -58,7 +57,6 @@ export function KonvaCanvas({
   storyboardFrames = [],
   activeFrameId,
   onFrameActivate,
-  onUpdateFrameObjects,
   onAddFrame,
   onNextFrame,
   onDuplicateFrame,
@@ -78,7 +76,7 @@ export function KonvaCanvas({
   // Calculate horizontal layout
   const frameGap = 100; // Space between frames
   const totalFrames = storyboardFrames.length || 1;
-  const totalWidth = totalFrames * frameW + (totalFrames - 1) * frameGap;
+  // Removed unused: const totalWidth = totalFrames * frameW + (totalFrames - 1) * frameGap;
   
   // Container size (observed via ResizeObserver)
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
@@ -1053,7 +1051,7 @@ export function KonvaCanvas({
                   y={frameY - 30}
                   draggable={true}
                   opacity={draggingFrameIndex === index ? 0.5 : 1}
-                  dragBoundFunc={(pos) => {
+                  dragBoundFunc={(_pos) => {
                     // Keep the element pinned to its original position
                     const currentFrameX = getFrameX(index);
                     return { x: currentFrameX, y: frameY - 30 };
