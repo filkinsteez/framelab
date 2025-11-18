@@ -392,12 +392,14 @@ function AppKonva() {
     }
   };
 
-  const handleDelete = () => {
-    if (selectedIds.length > 0) {
-      setObjects(prev => prev.filter(obj => !selectedIds.includes(obj.id)));
+  const handleDelete = useCallback(() => {
+    if (selectedIds.length > 0 && storyboardState.activeFrameId) {
+      // Update storyboard directly to avoid double history entry
+      const newObjects = objects.filter(obj => !selectedIds.includes(obj.id));
+      setStoryboardState(prev => updateFrameObjects(prev, prev.activeFrameId!, newObjects));
       setSelectedIds([]);
     }
-  };
+  }, [selectedIds, storyboardState.activeFrameId, objects]);
 
   const handleDeleteFrame = useCallback((frameId: string) => {
     setStoryboardState(prev => deleteFrame(prev, frameId));

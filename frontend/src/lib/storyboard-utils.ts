@@ -37,6 +37,7 @@ export function addFrame(
 
 /**
  * Delete frame (prevent deletion if it's the last frame)
+ * Note: Frame numbers are preserved (not renumbered) to maintain frame identity
  */
 export function deleteFrame(
   state: StoryboardState,
@@ -63,7 +64,7 @@ export function deleteFrame(
 
   return {
     ...state,
-    frames: renumberFrames(frames),
+    frames, // Don't renumber - keep original frame numbers
     activeFrameId,
   };
 }
