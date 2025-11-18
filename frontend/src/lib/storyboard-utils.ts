@@ -70,6 +70,7 @@ export function deleteFrame(
 
 /**
  * Reorder frames by moving from one index to another
+ * Note: Frame numbers are preserved (not renumbered) to maintain frame identity
  */
 export function reorderFrames(
   state: StoryboardState,
@@ -78,15 +79,18 @@ export function reorderFrames(
 ): StoryboardState {
   if (fromIndex === toIndex) return state;
   if (fromIndex < 0 || fromIndex >= state.frames.length) return state;
-  if (toIndex < 0 || toIndex >= state.frames.length) return state;
+  if (toIndex < 0 || toIndex > state.frames.length) return state; // Allow toIndex === length (append to end)
 
   const frames = [...state.frames];
   const [moved] = frames.splice(fromIndex, 1);
-  frames.splice(toIndex, 0, moved);
+  
+  // Adjust toIndex if we removed an element before the insertion point
+  const adjustedToIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
+  frames.splice(adjustedToIndex, 0, moved);
 
   return {
     ...state,
-    frames: renumberFrames(frames),
+    frames, // Don't renumber - keep original frame numbers
   };
 }
 

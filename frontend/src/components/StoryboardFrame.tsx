@@ -7,8 +7,8 @@ interface StoryboardFrameProps {
   onActivate: () => void;
   onDelete: () => void;
   onLabelChange: (label: string) => void;
-  draggable?: boolean;
-  onDragStart?: () => void;
+  isDragging?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: () => void;
   onDragOver?: (e: React.DragEvent) => void;
   onDrop?: (e: React.DragEvent) => void;
@@ -20,7 +20,7 @@ export function StoryboardFrame({
   onActivate,
   onDelete,
   onLabelChange,
-  draggable = false,
+  isDragging = false,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -64,9 +64,6 @@ export function StoryboardFrame({
       id={`frame-card-${frame.id}`}
       className={`storyboard-frame ${isActive ? 'active' : ''}`}
       onClick={onActivate}
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDrop={onDrop}
       style={{
@@ -75,12 +72,13 @@ export function StoryboardFrame({
         border: isActive ? '3px solid #1610ff' : '2px solid #ddd',
         borderRadius: '8px',
         overflow: 'hidden',
-        cursor: 'pointer',
+        cursor: isDragging ? 'grabbing' : 'pointer',
         transition: 'all 0.2s',
         transform: isActive ? 'scale(1.05)' : 'scale(1)',
         boxShadow: isActive ? '0 4px 12px rgba(33, 150, 243, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)',
         background: '#fff',
         position: 'relative',
+        opacity: isDragging ? 0.5 : 1,
       }}
     >
       {/* Header with drag handle and delete */}
@@ -151,7 +149,7 @@ export function StoryboardFrame({
         )}
       </div>
 
-      {/* Label */}
+      {/* Label with drag handle */}
       <div
         style={{
           padding: '8px',
@@ -159,8 +157,32 @@ export function StoryboardFrame({
           height: '30px',
           display: 'flex',
           alignItems: 'center',
+          gap: '6px',
         }}
       >
+        {/* Drag handle icon */}
+        <div
+          draggable={true}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            cursor: 'grab',
+            fontSize: '16px',
+            color: '#666',
+            fontWeight: 'bold',
+            userSelect: 'none',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            background: '#f0f0f0',
+            borderRadius: '3px',
+          }}
+          title="Drag to reorder"
+        >
+          ⋮⋮
+        </div>
+        
         {isEditing ? (
           <input
             type="text"
@@ -193,7 +215,7 @@ export function StoryboardFrame({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              width: '100%',
+              flex: 1,
             }}
             title={displayLabel}
           >

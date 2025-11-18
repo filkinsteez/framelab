@@ -22,6 +22,7 @@ import {
   updateFrameObjects,
   updateFrameThumbnail,
   setActiveFrame as setActiveFrameUtil,
+  duplicateFrame,
 } from './lib/storyboard-utils';
 import { NEXT_FRAME_PRESETS } from './lib/presets';
 import { uiLocks } from './lib/guards';
@@ -29,8 +30,16 @@ import { uiLocks } from './lib/guards';
 function AppKonva() {
   const [frameMode, setFrameMode] = useState<FrameMode>('LANDSCAPE_16_9');
   
-  // Storyboard state - replacing single objects array
-  const [storyboardState, setStoryboardState] = useState<StoryboardState>({
+  // Storyboard state with history support
+  const {
+    state: storyboardState,
+    setState: setStoryboardState,
+    undo: undoStoryboard,
+    redo: redoStoryboard,
+    canUndo: canUndoStoryboard,
+    canRedo: canRedoStoryboard,
+    reset: resetStoryboard,
+  } = useHistory<StoryboardState>({
     aspect: '16:9',
     frames: [{
       id: generateId(),
@@ -51,13 +60,13 @@ function AppKonva() {
     if (saved) {
       try {
         const parsed: StoryboardState = JSON.parse(saved);
-        setStoryboardState(parsed);
+        resetStoryboard(parsed);
         console.log('Loaded saved storyboard:', parsed.frames.length, 'frames');
       } catch (error) {
         console.error('Failed to load saved storyboard:', error);
       }
     }
-  }, []);
+  }, [resetStoryboard]);
 
   // Initialize active frame ONLY on first mount (not when entering global mode)
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -78,15 +87,9 @@ function AppKonva() {
     return () => clearTimeout(saveTimer);
   }, [storyboardState]);
   
-  // Legacy undo/redo - will integrate with history.ts later
-  const {
-    state: objects,
-    setState: setObjects,
-    undo,
-    redo,
-    canUndo,
-    canRedo,
-  } = useHistory<CanvasObject[]>([]);
+  // Legacy objects state - synced with active frame
+  // Note: No history tracking here since storyboard history is the source of truth
+  const [objects, setObjects] = useState<CanvasObject[]>([]);
   
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentTool, setCurrentTool] = useState<Tool>('select');
@@ -147,6 +150,8 @@ function AppKonva() {
   // Sync legacy objects state with active frame
   // This keeps existing code working while we transition
   const activeFrame = getActiveFrame();
+  const lastSyncedObjects = useRef<CanvasObject[]>([]);
+  
   useEffect(() => {
     if (isSyncing.current) return;
     
@@ -155,28 +160,37 @@ function AppKonva() {
       console.log('Syncing active frame objects to legacy objects state');
       isSyncing.current = true;
       setObjects(activeFrame.objects);
+      lastSyncedObjects.current = activeFrame.objects; // Remember what we just loaded
       setTimeout(() => { isSyncing.current = false; }, 50);
     } else if (!storyboardState.activeFrameId && objects.length > 0) {
       // In global mode, clear objects
       console.log('Clearing objects for global mode');
       isSyncing.current = true;
       setObjects([]);
+      lastSyncedObjects.current = []; // Remember we cleared
       setTimeout(() => { isSyncing.current = false; }, 50);
     }
   }, [activeFrame?.id, storyboardState.frames, storyboardState.activeFrameId]);
 
   // Sync changes back to active frame
+  // Don't sync if objects were just loaded from frame (prevent double history entries)
   useEffect(() => {
     if (isSyncing.current) return;
+    
+    // Check if this is just the result of loading from frame (not a real edit)
+    if (JSON.stringify(lastSyncedObjects.current) === JSON.stringify(objects)) {
+      return;
+    }
     
     // Only sync if we have an active frame (not in global mode)
     if (activeFrame && storyboardState.activeFrameId && JSON.stringify(activeFrame.objects) !== JSON.stringify(objects)) {
       console.log('Syncing legacy objects back to active frame');
       isSyncing.current = true;
+      lastSyncedObjects.current = objects; // Update to prevent loop
       updateActiveFrame(objects);
       setTimeout(() => { isSyncing.current = false; }, 50);
     }
-  }, [objects, storyboardState.activeFrameId]);
+  }, [objects, storyboardState.activeFrameId, activeFrame, updateActiveFrame]);
 
   // Generate thumbnail for active frame when objects change (debounced)
   useEffect(() => {
@@ -372,6 +386,10 @@ function AppKonva() {
     }
   };
 
+  const handleDeleteFrame = useCallback((frameId: string) => {
+    setStoryboardState(prev => deleteFrame(prev, frameId));
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -380,10 +398,18 @@ function AppKonva() {
         return;
       }
 
-      // Delete selected objects
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+      // Delete selected objects OR active frame
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        handleDelete();
+        
+        // Priority 1: Delete selected objects if any
+        if (selectedIds.length > 0) {
+          handleDelete();
+        }
+        // Priority 2: Delete active frame if no objects selected
+        else if (storyboardState.activeFrameId && storyboardState.frames.length > 1) {
+          handleDeleteFrame(storyboardState.activeFrameId);
+        }
       }
 
       // Navigate frames with Shift+←/→
@@ -408,7 +434,7 @@ function AppKonva() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, handleDelete, storyboardState, setActiveFrame]);
+  }, [selectedIds, handleDelete, storyboardState, setActiveFrame, handleDeleteFrame]);
 
   const handleFrameChange = (mode: FrameMode) => {
     if (objects.length > 0) {
@@ -525,10 +551,6 @@ function AppKonva() {
     });
   }, [frameMode]);
 
-  const handleDeleteFrame = useCallback((frameId: string) => {
-    setStoryboardState(prev => deleteFrame(prev, frameId));
-  }, []);
-
   const handleReorderFrames = useCallback((fromIndex: number, toIndex: number) => {
     setStoryboardState(prev => reorderFrames(prev, fromIndex, toIndex));
   }, []);
@@ -549,6 +571,71 @@ function AppKonva() {
     window.addEventListener('updateFrameLabel', handleLabelUpdate);
     return () => window.removeEventListener('updateFrameLabel', handleLabelUpdate);
   }, [handleFrameLabelChange]);
+
+  const handleDuplicateFrame = useCallback(() => {
+    const activeFrame = getActiveFrame();
+    if (!activeFrame) {
+      console.warn('No active frame to duplicate');
+      return;
+    }
+
+    console.log('Duplicating frame:', activeFrame.id);
+    
+    setStoryboardState(prev => {
+      const newState = duplicateFrame(prev, activeFrame.id);
+      console.log('Duplicated frame, new state:', newState);
+      
+      // Pan to the duplicated frame after a short delay
+      setTimeout(() => {
+        if (stageRef.current) {
+          const stage = stageRef.current;
+          const { w: frameW, h: frameH } = FRAME_SPECS[frameMode];
+          const frameGap = 100;
+          
+          // Find index of the new duplicated frame
+          const dupFrameIndex = newState.frames.findIndex(f => f.id === newState.activeFrameId);
+          if (dupFrameIndex < 0) return;
+          
+          // Calculate duplicated frame position
+          const dupFrameX = 100 + dupFrameIndex * (frameW + frameGap);
+          const frameY = (stage.height() - frameH) / 2;
+          
+          // Get current zoom
+          const currentZoom = stage.scaleX();
+          
+          // Calculate pan to center the duplicated frame
+          const newPan = {
+            x: stage.width() / 2 - (dupFrameX + frameW / 2) * currentZoom,
+            y: stage.height() / 2 - (frameY + frameH / 2) * currentZoom,
+          };
+          
+          console.log('Panning to duplicated frame at index:', dupFrameIndex);
+          
+          // Animate pan
+          const tween = new Konva.Tween({
+            node: stage,
+            duration: 0.3,
+            x: newPan.x,
+            y: newPan.y,
+            easing: Konva.Easings.EaseInOut,
+            onFinish: () => {
+              // Dispatch event to sync React state after animation
+              window.dispatchEvent(new CustomEvent('syncViewport', {
+                detail: { x: newPan.x, y: newPan.y, zoom: currentZoom }
+              }));
+            },
+            onUpdate: () => {
+              // Trigger re-renders during animation
+              window.dispatchEvent(new Event('viewportChanged'));
+            },
+          });
+          tween.play();
+        }
+      }, 50);
+      
+      return newState;
+    });
+  }, [stageRef, frameMode, getActiveFrame]);
 
   const handleNextFrame = useCallback(async (afterIndex: number) => {
     const frame = storyboardState.frames[afterIndex];
@@ -761,15 +848,15 @@ function AppKonva() {
         }
 
         const aspectRatio = '16:9';
-        console.log('Sending to FAL with aspect ratio:', aspectRatio);
+      console.log('Sending to FAL with aspect ratio:', aspectRatio);
 
-        const result = await FalClient.generate({
-          prompt,
-          imageUrl: canvasDataUri || undefined,
-          strength: canvasDataUri ? 0.75 : undefined,
-          aspectRatio,
+      const result = await FalClient.generate({
+        prompt,
+        imageUrl: canvasDataUri || undefined,
+        strength: canvasDataUri ? 0.75 : undefined,
+        aspectRatio,
           numImages: 1,
-        });
+      });
 
       if (result.success && result.data && result.data.images.length > 0) {
         console.log('Generation successful!', result.data);
@@ -900,7 +987,10 @@ function AppKonva() {
             console.log('Plus button - Next Frame clicked, lastIndex:', lastIndex);
             handleNextFrame(lastIndex);
           }}
+          onDuplicateFrame={handleDuplicateFrame}
+          onConvertTo3D={handleConvertTo3D}
           canGenerateNext={(getActiveFrame()?.objects.length || 0) > 0}
+          onReorderFrames={handleReorderFrames}
         />
       </main>
 
@@ -976,16 +1066,13 @@ function AppKonva() {
       <ToolBelt
         currentTool={currentTool}
         onChangeTool={setCurrentTool}
-        onUndo={undo}
-        onRedo={redo}
+        onUndo={undoStoryboard}
+        onRedo={redoStoryboard}
         onDelete={handleDelete}
         onSave={handleSave}
-        onConvertTo3D={handleConvertTo3D}
-        canUndo={canUndo}
-        canRedo={canRedo}
+        canUndo={canUndoStoryboard}
+        canRedo={canRedoStoryboard}
         hasSelection={selectedIds.length > 0}
-        hasImageSelected={hasImageSelected}
-        has3DModelSelected={has3DModelSelected}
       />
 
       <SettingsPanel visible={showSettings} onClose={() => setShowSettings(false)} />

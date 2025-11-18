@@ -18,41 +18,63 @@ export function StoryboardStrip({
   onFrameLabelChange,
   onReorderFrames,
 }: StoryboardStripProps) {
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [draggingFrameId, setDraggingFrameId] = useState<string | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
 
-  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+  const handleDragStart = (index: number, frameId: string) => (e: React.DragEvent) => {
     if (!canReorderStrip()) {
       e.preventDefault();
       return;
     }
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(index));
-    setDraggingIndex(index);
+    setDraggingFrameId(frameId);
   };
 
   const handleDragOver = (index: number) => (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setDropTargetIndex(index);
+    
+    // Calculate if mouse is in left or right half of the frame
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX;
+    const frameMiddle = rect.left + rect.width / 2;
+    
+    const newDropIndex = mouseX < frameMiddle ? index : index + 1;
+    if (newDropIndex !== dropTargetIndex) {
+      setDropTargetIndex(newDropIndex);
+    }
   };
 
-  const handleDrop = (toIndex: number) => (e: React.DragEvent) => {
+  const handleDrop = () => (e: React.DragEvent) => {
     e.preventDefault();
     const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
     
-    if (fromIndex !== toIndex && !isNaN(fromIndex)) {
-      onReorderFrames(fromIndex, toIndex);
+    if (dropTargetIndex !== null && fromIndex !== dropTargetIndex && !isNaN(fromIndex)) {
+      onReorderFrames(fromIndex, dropTargetIndex);
     }
     
-    setDraggingIndex(null);
+    setDraggingFrameId(null);
     setDropTargetIndex(null);
   };
 
   const handleDragEnd = () => {
-    setDraggingIndex(null);
+    setDraggingFrameId(null);
     setDropTargetIndex(null);
   };
+
+  // Insertion marker component
+  const InsertionMarker = ({ index }: { index: number }) => (
+    <div
+      style={{
+        width: dropTargetIndex === index ? '3px' : '0px',
+        height: '200px',
+        background: '#1610ff',
+        transition: 'width 0.15s ease',
+        flexShrink: 0,
+      }}
+    />
+  );
 
   return (
     <div
@@ -70,20 +92,24 @@ export function StoryboardStrip({
       }}
     >
       {storyboardState.frames.map((frame, index) => (
-        <StoryboardFrame
-          key={frame.id}
-          frame={frame}
-          isActive={frame.id === storyboardState.activeFrameId}
-          onActivate={() => onFrameActivate(frame.id)}
-          onDelete={() => onFrameDelete(frame.id)}
-          onLabelChange={(label) => onFrameLabelChange(frame.id, label)}
-          draggable={canReorderStrip()}
-          onDragStart={handleDragStart(index)}
-          onDragEnd={handleDragEnd}
-          onDragOver={handleDragOver(index)}
-          onDrop={handleDrop(index)}
-        />
+        <>
+          <InsertionMarker key={`marker-${index}`} index={index} />
+          <StoryboardFrame
+            key={frame.id}
+            frame={frame}
+            isActive={frame.id === storyboardState.activeFrameId}
+            onActivate={() => onFrameActivate(frame.id)}
+            onDelete={() => onFrameDelete(frame.id)}
+            onLabelChange={(label) => onFrameLabelChange(frame.id, label)}
+            isDragging={frame.id === draggingFrameId}
+            onDragStart={handleDragStart(index, frame.id)}
+            onDragEnd={handleDragEnd}
+            onDragOver={handleDragOver(index)}
+            onDrop={handleDrop()}
+          />
+        </>
       ))}
+      <InsertionMarker key={`marker-${storyboardState.frames.length}`} index={storyboardState.frames.length} />
     </div>
   );
 }

@@ -40,7 +40,10 @@ interface KonvaCanvasProps {
   onUpdateFrameObjects?: (frameId: string, objects: CanvasObject[]) => void;
   onAddFrame?: () => void;
   onNextFrame?: () => void;
+  onDuplicateFrame?: () => void;
+  onConvertTo3D?: () => void;
   canGenerateNext?: boolean;
+  onReorderFrames?: (fromIndex: number, toIndex: number) => void;
 }
 
 export function KonvaCanvas({
@@ -58,7 +61,10 @@ export function KonvaCanvas({
   onUpdateFrameObjects,
   onAddFrame,
   onNextFrame,
+  onDuplicateFrame,
+  onConvertTo3D,
   canGenerateNext = false,
+  onReorderFrames,
 }: KonvaCanvasProps) {
   const localStageRef = useRef<Konva.Stage>(null);
   const stageRef = externalStageRef || localStageRef;
@@ -133,6 +139,10 @@ export function KonvaCanvas({
     },
   });
   
+  // Frame reorder drag-and-drop state
+  const [draggingFrameIndex, setDraggingFrameIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  
   // Recalculate viewport when container or frame size changes
   useEffect(() => {
     const newZoom = Math.min(
@@ -153,6 +163,7 @@ export function KonvaCanvas({
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isSpacebarHeld, setIsSpacebarHeld] = useState(false);
   
   const [snapGuides, setSnapGuides] = useState<{
     showVerticalCenter: boolean;
@@ -252,6 +263,16 @@ export function KonvaCanvas({
 
   // Pan handlers and tool creation
   const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    // Spacebar pan mode: enable panning on any click
+    if (isSpacebarHeld && e.evt.button === 0) {
+      setIsDraggingCanvas(true);
+      setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
+      // Change cursor to grabbing
+      const container = stageRef.current?.container();
+      if (container) container.style.cursor = 'grabbing';
+      return;
+    }
+
     // Guard: If we're currently transforming or click is on transformer, don't change selection
     if (isTransforming) {
       return;
@@ -460,17 +481,17 @@ export function KonvaCanvas({
         setSelectedIds([]); // Clear selection when starting marquee
       } else if (clickedOnEmpty) {
         // Pan the canvas when clicking outside frame
-        setIsDraggingCanvas(true);
-        setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
-        setSelectedIds([]);
+      setIsDraggingCanvas(true);
+      setDragStart({ x: e.evt.clientX, y: e.evt.clientY });
+      setSelectedIds([]);
         // Deactivate all frames (enter global mode)
         if (onFrameActivate) {
           console.log('Entering global mode - deactivating all frames');
           onFrameActivate(''); // Empty string means global mode
-        }
+    }
       }
     }
-  }, [currentTool, storyboardFrames, activeFrameId, frameY, frameW, frameH, selectedIds, setObjects, setSelectedIds, objects, getObjectIndex, isTransforming, onFrameActivate, getActiveFrameX]);
+  }, [currentTool, storyboardFrames, activeFrameId, frameY, frameW, frameH, selectedIds, setObjects, setSelectedIds, objects, getObjectIndex, isTransforming, onFrameActivate, getActiveFrameX, isSpacebarHeld, stageRef]);
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
@@ -644,7 +665,13 @@ export function KonvaCanvas({
     setIsDrawing(false);
     uiLocks.drawing = false;
     setIsDraggingCanvas(false);
-  }, [isDrawing, currentBrushPoints, currentArrowPoints, isMarqueeSelecting, marqueeStart, marqueeEnd, objects, setObjects, setSelectedIds]);
+    
+    // If spacebar is still held, reset cursor to grab
+    if (isSpacebarHeld) {
+      const container = stageRef.current?.container();
+      if (container) container.style.cursor = 'grab';
+    }
+  }, [isDrawing, currentBrushPoints, currentArrowPoints, isMarqueeSelecting, marqueeStart, marqueeEnd, objects, setObjects, setSelectedIds, isSpacebarHeld, stageRef]);
 
   // Handle file drops
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -793,7 +820,7 @@ export function KonvaCanvas({
     );
 
     // Hide guides immediately on drag end
-    setSnapGuides({ showVerticalCenter: false, showHorizontalCenter: false });
+      setSnapGuides({ showVerticalCenter: false, showHorizontalCenter: false });
   }, [setObjects, objects]);
 
   // Keyboard shortcuts
@@ -805,6 +832,15 @@ export function KonvaCanvas({
         return;
       }
 
+      // Spacebar: enable pan mode
+      if (e.code === 'Space' && !isSpacebarHeld) {
+        e.preventDefault();
+        setIsSpacebarHeld(true);
+        // Change cursor to grab
+        const container = stageRef.current?.container();
+        if (container) container.style.cursor = 'grab';
+      }
+
       // Deselect on Escape
       if (e.key === 'Escape') {
         setSelectedIds([]);
@@ -812,9 +848,26 @@ export function KonvaCanvas({
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Spacebar released: disable pan mode
+      if (e.code === 'Space') {
+        setIsSpacebarHeld(false);
+        setIsDraggingCanvas(false);
+        // Reset cursor (only if not dragging)
+        const container = stageRef.current?.container();
+        if (container) {
+          container.style.cursor = 'default';
+        }
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setSelectedIds]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [setSelectedIds, isSpacebarHeld, stageRef]);
 
   // Flip handlers
   const handleFlipHorizontal = useCallback(() => {
@@ -929,8 +982,11 @@ export function KonvaCanvas({
       case 'flipVertical':
         handleFlipVertical();
         break;
+      case 'convertTo3D':
+        onConvertTo3D?.();
+        break;
     }
-  }, [selectedIds, setObjects, setSelectedIds, handleFlipHorizontal, handleFlipVertical]);
+  }, [selectedIds, setObjects, setSelectedIds, handleFlipHorizontal, handleFlipVertical, onConvertTo3D]);
 
   // Objects are already in render order (array order = z-order)
   // No longer needed since we render per-frame
@@ -943,7 +999,9 @@ export function KonvaCanvas({
         style={{
           width: '100%',
           height: '100%',
-          backgroundColor: '#f5f5f5',
+          backgroundColor: '#ffffff',
+          backgroundImage: 'radial-gradient(#bdbee6 0.7px, #ffffff 0.7px)',
+          backgroundSize: '14px 14px',
           overflow: 'hidden',
         }}
         onDrop={handleDrop}
@@ -971,60 +1029,134 @@ export function KonvaCanvas({
             
             return (
               <Group key={frame.id}>
-                {/* Frame background */}
-                <Rect
+          {/* Frame background */}
+          <Rect
                   name={`frame-background-${frame.id}`}
-                  x={frameX}
-                  y={frameY}
-                  width={frameW}
-                  height={frameH}
-                  fill="white"
+            x={frameX}
+            y={frameY}
+            width={frameW}
+            height={frameH}
+            fill="white"
                   stroke={isActive ? '#1610ff' : '#333'}
-                  strokeWidth={isActive ? 3 : 2}
-                  shadowColor="#11111a"
-                  shadowBlur={16}
-                  shadowOpacity={0.1}
+                  strokeWidth={isActive ? 1.5 : 1}
+                  shadowColor="#959da5"
+                  shadowBlur={24}
+                  shadowOpacity={0.2}
                   shadowOffsetX={0}
-                  shadowOffsetY={4}
+                  shadowOffsetY={8}
                   onClick={() => onFrameActivate?.(frame.id)}
                 />
                 
-                {/* Frame label */}
-                <Text
+                {/* Frame label with drag handle */}
+                <Group
                   x={frameX}
-                  y={frameY - 40}
-                  text={frame.customLabel || `Frame ${frame.frameNumber}`}
-                  fontSize={24}
-                  fontFamily="Arial"
-                  fill={isActive ? '#1610ff' : '#333'}
-                  fontStyle="normal"
-                  visible={editingFrameId !== frame.id}
-                  onClick={() => {
-                    // Single click: activate frame
-                    onFrameActivate?.(frame.id);
+                  y={frameY - 30}
+                  draggable={true}
+                  opacity={draggingFrameIndex === index ? 0.5 : 1}
+                  dragBoundFunc={(pos) => {
+                    // Keep the element pinned to its original position
+                    const currentFrameX = getFrameX(index);
+                    return { x: currentFrameX, y: frameY - 30 };
                   }}
-                  onDblClick={() => {
-                    // Double click: enter edit mode
-                    // Calculate screen position for input overlay - same position as text
-                    const screenX = frameX * viewport.zoom + viewport.pan.x;
-                    const screenY = (frameY - 40) * viewport.zoom + viewport.pan.y - 1; // Adjust 1px up
-                    setEditingFrameId(frame.id);
-                    setEditingLabel(frame.customLabel || '');
-                    setEditingPosition({ x: screenX, y: screenY });
+                  onDragStart={(e) => {
+                    setDraggingFrameIndex(index);
+                    // Reset position immediately
+                    const node = e.target;
+                    node.position({ x: frameX, y: frameY - 30 });
+                  }}
+                  onDragMove={(e) => {
+                    const stage = e.target.getStage();
+                    if (!stage) return;
+                    
+                    // Reset position to prevent any movement
+                    const node = e.target;
+                    const currentFrameX = getFrameX(index);
+                    node.position({ x: currentFrameX, y: frameY - 30 });
+                    
+                    // Get mouse position
+                    const pointerPos = stage.getPointerPosition();
+                    if (!pointerPos) return;
+                    
+                    // Convert to canvas coordinates
+                    const canvasX = (pointerPos.x - viewport.pan.x) / viewport.zoom;
+                    
+                    // Determine which frame position the mouse is over
+                    let targetIndex = null;
+                    for (let i = 0; i <= storyboardFrames.length; i++) {
+                      const insertX = i === 0 ? 0 : getFrameX(i - 1) + frameW / 2;
+                      const nextInsertX = i === storyboardFrames.length ? 99999 : getFrameX(i) + frameW / 2;
+                      
+                      if (canvasX >= insertX && canvasX < nextInsertX) {
+                        targetIndex = i;
+                        break;
+                      }
+                    }
+                    
+                    if (targetIndex !== null && targetIndex !== dropTargetIndex) {
+                      setDropTargetIndex(targetIndex);
+                    }
+                  }}
+                  onDragEnd={(e) => {
+                    // Reset position one final time
+                    const node = e.target;
+                    const currentFrameX = getFrameX(index);
+                    node.position({ x: currentFrameX, y: frameY - 30 });
+                    
+                    if (draggingFrameIndex !== null && dropTargetIndex !== null && draggingFrameIndex !== dropTargetIndex) {
+                      onReorderFrames?.(draggingFrameIndex, dropTargetIndex);
+                    }
+                    setDraggingFrameIndex(null);
+                    setDropTargetIndex(null);
                   }}
                   onMouseEnter={(e) => {
                     const container = e.target.getStage()?.container();
-                    if (container) container.style.cursor = 'pointer';
+                    if (container) container.style.cursor = 'grab';
                   }}
                   onMouseLeave={(e) => {
                     const container = e.target.getStage()?.container();
                     if (container) container.style.cursor = 'default';
                   }}
-                  listening={true}
-                />
+                >
+                  <Text
+                    x={0}
+                    y={0}
+                    text={frame.customLabel || `Frame ${frame.frameNumber}`}
+                    fontSize={18}
+                    fontFamily="Arial"
+                    fill={isActive ? '#1610ff' : '#333'}
+                    visible={editingFrameId !== frame.id}
+                    onClick={(e) => {
+                      e.cancelBubble = true;
+                      onFrameActivate?.(frame.id);
+                    }}
+                    onDblClick={(e) => {
+                      e.cancelBubble = true;
+                      const screenX = frameX * viewport.zoom + viewport.pan.x;
+                      const screenY = (frameY - 30) * viewport.zoom + viewport.pan.y - 2;
+                      setEditingFrameId(frame.id);
+                      setEditingLabel(frame.customLabel || '');
+                      setEditingPosition({ x: screenX, y: screenY });
+                    }}
+                  />
+                </Group>
               </Group>
             );
           })}
+          
+          {/* Blue insertion line indicator */}
+          {dropTargetIndex !== null && (
+            <Line
+              points={[
+                getFrameX(dropTargetIndex) - (dropTargetIndex > 0 ? frameGap / 2 : 50),
+                frameY - 40,
+                getFrameX(dropTargetIndex) - (dropTargetIndex > 0 ? frameGap / 2 : 50),
+                frameY + frameH + 20
+              ]}
+              stroke="#1610ff"
+              strokeWidth={3}
+              listening={false}
+            />
+          )}
         </Layer>
 
         {/* Art layer - render each frame's objects */}
@@ -1034,39 +1166,39 @@ export function KonvaCanvas({
             const isActive = !!(activeFrameId && frame.id === activeFrameId);
             
             return (
-              <Group
+          <Group
                 key={`art-${frame.id}`}
-                x={frameX}
-                y={frameY}
-                clipFunc={(ctx) => {
-                  ctx.rect(0, 0, frameW, frameH);
-                }}
-              >
+            x={frameX}
+            y={frameY}
+            clipFunc={(ctx) => {
+              ctx.rect(0, 0, frameW, frameH);
+            }}
+          >
                 {frame.objects.map(obj => (
-                  <RenderObject
-                    key={obj.id}
-                    object={obj}
+              <RenderObject
+                key={obj.id}
+                object={obj}
                     isSelected={isActive && selectedIds.includes(obj.id)}
-                    onSelect={handleShapeClick}
+                onSelect={handleShapeClick}
                     onDragMove={handleDragMove}
-                    onTransformEnd={handleTransformEnd}
+                onTransformEnd={handleTransformEnd}
                     currentTool={currentTool}
                     isMarqueeSelecting={isMarqueeSelecting}
-                  />
-                ))}
+              />
+            ))}
 
                 {/* Current brush stroke being drawn - only on active frame */}
                 {isActive && isDrawing && currentTool === 'brush' && currentBrushPoints.length > 2 && (
-                  <Line
-                    points={currentBrushPoints}
-                    stroke="#FF0000"
-                    strokeWidth={6}
-                    tension={0.5}
-                    lineCap="round"
-                    lineJoin="round"
-                    listening={false}
-                  />
-                )}
+              <Line
+                points={currentBrushPoints}
+                stroke="#FF0000"
+                strokeWidth={6}
+                tension={0.5}
+                lineCap="round"
+                lineJoin="round"
+                listening={false}
+              />
+            )}
 
                 {/* Current arrow being drawn - only on active frame */}
                 {isActive && isDrawing && currentTool === 'arrow' && currentArrowPoints.length === 4 && (() => {
@@ -1108,17 +1240,17 @@ export function KonvaCanvas({
                   const height = Math.abs(marqueeEnd.y - marqueeStart.y);
                   
                   return (
-                    <Rect
+          <Rect
                       x={x}
                       y={y}
                       width={width}
                       height={height}
                       stroke="#1610ff"
-                      strokeWidth={2}
+            strokeWidth={2}
                       dash={[5, 5]}
                       fill="rgba(33, 150, 243, 0.1)"
-                      listening={false}
-                    />
+            listening={false}
+          />
                   );
                 })()}
               </Group>
@@ -1146,17 +1278,17 @@ export function KonvaCanvas({
               />
             )}
 
-                {/* Horizontal center guide */}
-                {snapGuides.showHorizontalCenter && (
-                  <Line
-                    points={[0, frameH / 2, frameW, frameH / 2]}
-                    stroke="#FFD700"
-                    strokeWidth={2}
-                    dash={[10, 5]}
-                    listening={false}
-                  />
-                )}
-              </Group>
+            {/* Horizontal center guide */}
+            {snapGuides.showHorizontalCenter && (
+              <Line
+                points={[0, frameH / 2, frameW, frameH / 2]}
+                stroke="#FFD700"
+                strokeWidth={2}
+                dash={[10, 5]}
+                listening={false}
+              />
+            )}
+          </Group>
             );
           })}
 
@@ -1166,15 +1298,21 @@ export function KonvaCanvas({
             rotateAnchorOffset={30}
             ignoreStroke={false}
             shouldOverdrawWholeArea={selectedIds.length > 1}
+            borderStroke="#1610ff"
+            borderStrokeWidth={1}
+            anchorStroke="#1610ff"
+            anchorFill="white"
+            anchorCornerRadius={2}
+            anchorStrokeWidth={1}
             onTransformStart={(e) => {
               setIsTransforming(true);
               uiLocks.transforming = true;
               e.cancelBubble = true;
-              console.log('Transform started on:', transformerRef.current?.nodes().map(n => n.id()));
             }}
             onTransformEnd={(e) => {
               setIsTransforming(false);
               uiLocks.transforming = false;
+              
               // Update all transformed nodes
               const nodes = transformerRef.current?.nodes() || [];
               nodes.forEach(node => {
@@ -1355,6 +1493,37 @@ export function KonvaCanvas({
                 <span>✨</span>
                 <span>Next Frame (AI)</span>
               </button>
+
+              <button
+                onClick={() => {
+                  if (activeFrameId) {
+                    console.log('Duplicate Frame clicked from popover');
+                    onDuplicateFrame?.();
+                    setShowPlusPopover(false);
+                  }
+                }}
+                disabled={!activeFrameId}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: 'none',
+                  background: 'none',
+                  textAlign: 'left',
+                  cursor: activeFrameId ? 'pointer' : 'not-allowed',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: activeFrameId ? 1 : 0.5,
+                }}
+                onMouseEnter={(e) => { if (activeFrameId) e.currentTarget.style.background = '#f5f5f5'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+                title={activeFrameId ? 'Duplicate current frame' : 'No active frame'}
+              >
+                <span>📋</span>
+                <span>Duplicate Frame</span>
+              </button>
             </div>
           </>
         );
@@ -1402,7 +1571,7 @@ export function KonvaCanvas({
             position: 'absolute',
             left: `${editingPosition.x}px`,
             top: `${editingPosition.y}px`,
-            fontSize: `${24 * viewport.zoom}px`,
+            fontSize: `${18 * viewport.zoom}px`,
             fontFamily: 'Arial',
             fontWeight: 'normal',
             padding: '0',
@@ -1410,8 +1579,8 @@ export function KonvaCanvas({
             borderRadius: '0',
             background: 'transparent',
             outline: 'none',
-            color: '#333',
-            caretColor: '#333',
+            color: '#999',
+            caretColor: '#999',
             minWidth: '200px',
             zIndex: 1000,
           }}
@@ -1433,6 +1602,7 @@ export function KonvaCanvas({
           onDuplicate={() => handleContextMenuAction('duplicate')}
           onFlipHorizontal={() => handleContextMenuAction('flipHorizontal')}
           onFlipVertical={() => handleContextMenuAction('flipVertical')}
+          onConvertTo3D={selectedIds.length === 1 && objects.find(o => o.id === selectedIds[0])?.type === 'image' ? () => handleContextMenuAction('convertTo3D') : undefined}
         />
       )}
     </>
