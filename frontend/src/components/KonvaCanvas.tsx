@@ -75,7 +75,7 @@ export function KonvaCanvas({
   
   // Calculate horizontal layout
   const frameGap = 100; // Space between frames
-  const totalFrames = storyboardFrames.length || 1;
+  // const totalFrames = storyboardFrames.length || 1;
   // Removed unused: const totalWidth = totalFrames * frameW + (totalFrames - 1) * frameGap;
   
   // Container size (observed via ResizeObserver)

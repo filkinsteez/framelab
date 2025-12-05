@@ -331,22 +331,22 @@ function AppKonva() {
   // Removed unused variables: hasImageSelected, has3DModelSelected, open3DViewerForSelected
   // 3D viewer functionality is now in context menu
 
-  const _open3DViewerForSelected = useCallback(() => {
-    if (!selectedObject || selectedObject.type !== 'image' || !selectedObject.model3D) return;
-    
-    // Hide the underlying image
-    setObjects(prev => prev.map(obj =>
-      obj.id === selectedObject.id
-        ? { ...obj, transform: { ...obj.transform, opacity: 0 } }
-        : obj
-    ));
-    
-    setActiveModelId(selectedObject.id);
-    setModelUrl(selectedObject.model3D.modelUrl);
-    updateOverlayPosition(selectedObject.id);
-    setShow3DViewer(true);
-  }, [selectedObject, updateOverlayPosition, setObjects]);
-
+//   const _open3DViewerForSelected = useCallback(() => {
+//     if (!selectedObject || selectedObject.type !== 'image' || !selectedObject.model3D) return;
+//     
+//     // Hide the underlying image
+//     setObjects(prev => prev.map(obj =>
+//       obj.id === selectedObject.id
+//         ? { ...obj, transform: { ...obj.transform, opacity: 0 } }
+//         : obj
+//     ));
+//     
+//     setActiveModelId(selectedObject.id);
+//     setModelUrl(selectedObject.model3D.modelUrl);
+//     updateOverlayPosition(selectedObject.id);
+//     setShow3DViewer(true);
+//   }, [selectedObject, updateOverlayPosition, setObjects]);
+// 
   const handleSave = async () => {
     if (!stageRef.current) {
       alert('Canvas not ready');
