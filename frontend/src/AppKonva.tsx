@@ -995,14 +995,7 @@ function AppKonva() {
             console.log('Plus button - New Frame clicked, current frames:', storyboardState.frames.length);
             handleAddFrame(storyboardState.frames.length);
           }}
-          onNextFrame={() => {
-            const lastIndex = storyboardState.frames.length - 1;
-            console.log('Plus button - Next Frame clicked, lastIndex:', lastIndex);
-            handleNextFrame(lastIndex);
-          }}
-          onDuplicateFrame={handleDuplicateFrame}
           onConvertTo3D={handleConvertTo3D}
-          canGenerateNext={(getActiveFrame()?.objects.length || 0) > 0}
           onReorderFrames={handleReorderFrames}
         />
       </main>

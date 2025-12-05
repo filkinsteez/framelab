@@ -2,15 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 
 interface FramePlusButtonProps {
   onNewFrame: () => void;
-  onNextFrame: () => void;
-  canGenerateNext: boolean; // false if previous frame is empty
   isLarge?: boolean; // true for end-of-strip button
 }
 
 export function FramePlusButton({
   onNewFrame,
-  onNextFrame,
-  canGenerateNext,
   isLarge = false,
 }: FramePlusButtonProps) {
   const [showPopover, setShowPopover] = useState(false);
@@ -36,13 +32,6 @@ export function FramePlusButton({
     setShowPopover(false);
   };
 
-  const handleNextFrame = () => {
-    if (canGenerateNext) {
-      onNextFrame();
-      setShowPopover(false);
-    }
-  };
-
   return (
     <div
       ref={popoverRef}
@@ -56,31 +45,26 @@ export function FramePlusButton({
       <button
         onClick={() => setShowPopover(!showPopover)}
         style={{
-          width: isLarge ? '60px' : '40px',
-          height: isLarge ? '60px' : '40px',
+          width: isLarge ? '80px' : '32px',
+          height: isLarge ? '80px' : '32px',
           borderRadius: '50%',
-          border: '2px dashed #1610ff',
-          background: showPopover ? '#1610ff' : '#fff',
-          color: showPopover ? '#fff' : '#1610ff',
-          fontSize: isLarge ? '32px' : '24px',
-          fontWeight: 'bold',
+          border: '2px dashed #ccc',
+          background: 'white',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          fontSize: isLarge ? '32px' : '20px',
+          color: '#666',
           transition: 'all 0.2s',
-          lineHeight: 1,
-          paddingBottom: '5px', // Optical centering - move plus up slightly
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#1610ff';
-          e.currentTarget.style.color = '#fff';
+          e.currentTarget.style.borderColor = '#007bff';
+          e.currentTarget.style.color = '#007bff';
         }}
         onMouseLeave={(e) => {
-          if (!showPopover) {
-            e.currentTarget.style.background = '#fff';
-            e.currentTarget.style.color = '#1610ff';
-          }
+          e.currentTarget.style.borderColor = '#ccc';
+          e.currentTarget.style.color = '#666';
         }}
         title="Add frame"
       >
@@ -92,15 +76,15 @@ export function FramePlusButton({
           style={{
             position: 'absolute',
             top: '100%',
-            left: '0',
+            left: '50%',
+            transform: 'translateX(-50%)',
             marginTop: '8px',
-            background: '#fff',
-            border: '1px solid #ddd',
+            background: 'white',
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             padding: '8px',
             zIndex: 1000,
-            minWidth: '180px',
+            minWidth: '160px',
           }}
         >
           <button
@@ -128,10 +112,8 @@ export function FramePlusButton({
             <span>📄</span>
             <span>New Frame</span>
           </button>
-
         </div>
       )}
     </div>
   );
 }
-

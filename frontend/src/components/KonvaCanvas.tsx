@@ -38,10 +38,8 @@ interface KonvaCanvasProps {
   activeFrameId?: string | null;
   onFrameActivate?: (frameId: string) => void;
   onAddFrame?: () => void;
-  onNextFrame?: () => void;
   onDuplicateFrame?: () => void;
   onConvertTo3D?: () => void;
-  canGenerateNext?: boolean;
   onReorderFrames?: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -58,10 +56,8 @@ export function KonvaCanvas({
   activeFrameId,
   onFrameActivate,
   onAddFrame,
-  onNextFrame,
   onDuplicateFrame,
   onConvertTo3D,
-  canGenerateNext = false,
   onReorderFrames,
 }: KonvaCanvasProps) {
   const localStageRef = useRef<Konva.Stage>(null);
