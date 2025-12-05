@@ -1460,38 +1460,6 @@ export function KonvaCanvas({
                 <span>📄</span>
                 <span>New Frame</span>
               </button>
-
-              <button
-                onClick={() => {
-                  if (canGenerateNext) {
-                    console.log('Next Frame clicked from popover');
-                    onNextFrame?.();
-                    setShowPlusPopover(false);
-                  }
-                }}
-                disabled={!canGenerateNext}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  border: 'none',
-                  background: 'none',
-                  textAlign: 'left',
-                  cursor: canGenerateNext ? 'pointer' : 'not-allowed',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  opacity: canGenerateNext ? 1 : 0.5,
-                }}
-                onMouseEnter={(e) => { if (canGenerateNext) e.currentTarget.style.background = '#f5f5f5'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
-                title={canGenerateNext ? 'Generate next frame with AI' : 'Current frame is empty'}
-              >
-                <span>✨</span>
-                <span>Next Frame (AI)</span>
-              </button>
-
               <button
                 onClick={() => {
                   if (activeFrameId) {
